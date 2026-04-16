@@ -1,4 +1,5 @@
 import { BrowserProvider, JsonRpcSigner } from "ethers";
+import { WALLETCONNECT_PROJECT_ID } from "./constants";
 
 declare global {
   interface Window {
@@ -100,4 +101,38 @@ export function storeEVMWallet(w: EVMWallet) {
 
 export function storeSolanaWallet(w: SolanaWallet) {
   (window as any).__solWallet = w;
+}
+
+export async function connectWalletConnect(): Promise<EVMWallet> {
+  const { default: EthereumProvider } = await import(
+    "@walletconnect/ethereum-provider"
+  );
+
+  const wcProvider = await EthereumProvider.init({
+    projectId: WALLETCONNECT_PROJECT_ID,
+    chains: [1],
+    optionalChains: [137, 56, 42161, 10],
+    showQrModal: true,
+    metadata: {
+      name: "Vestige Index",
+      description: "Plataforma DeFi institucional",
+      url: "https://vestigeindex.com",
+      icons: ["https://vestigeindex.com/favicon.ico"],
+    },
+  });
+
+  await wcProvider.connect();
+
+  const provider = new BrowserProvider(wcProvider as any);
+  const signer = await provider.getSigner();
+  const address = await signer.getAddress();
+  const network = await provider.getNetwork();
+  const chainId = Number(network.chainId);
+
+  wcProvider.on("disconnect", () => {
+    delete (window as any).__wcProvider;
+  });
+  (window as any).__wcProvider = wcProvider;
+
+  return { provider, signer, address, chainId };
 }

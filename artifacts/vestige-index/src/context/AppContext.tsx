@@ -17,7 +17,7 @@ export interface SolanaWalletState {
   signAndSendTransaction: (tx: any) => Promise<{ signature: string }>;
 }
 
-export type WalletType = "metamask" | "coinbase" | "phantom";
+export type WalletType = "metamask" | "coinbase" | "phantom" | "walletconnect";
 
 export interface WalletState {
   connected: boolean;

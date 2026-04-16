@@ -11,6 +11,8 @@ export const TOP100_FEE = 0.003;
 export const INDEX_FEE = 0.005;
 export const COMMENT_FEE_USDT = 0.25;
 
+export const WALLETCONNECT_PROJECT_ID = "wcp_o-cvR5J_pJTcyHa-l-zBzMc_SrKNMB6P";
+
 export const ADMIN_USER = "VestigeAdmin";
 export const ADMIN_PASS = "AdminGlobal2025";
 

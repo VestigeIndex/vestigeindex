@@ -8,6 +8,7 @@ import {
   connectMetaMask,
   connectCoinbase,
   connectPhantom,
+  connectWalletConnect,
 } from "../lib/walletService";
 
 interface WalletModalProps {
@@ -27,6 +28,12 @@ function WalletModal({ onClose }: WalletModalProps) {
       description: "Wallet EVM — Ethereum, Polygon, BNB...",
     },
     {
+      key: "walletconnect" as const,
+      label: "WalletConnect",
+      color: "#3B99FC",
+      description: "Escaner QR — Trust, Rainbow, Argent...",
+    },
+    {
       key: "coinbase" as const,
       label: "Coinbase Wallet",
       color: "#0052FF",
@@ -40,39 +47,25 @@ function WalletModal({ onClose }: WalletModalProps) {
     },
   ];
 
-  async function connect(type: "metamask" | "coinbase" | "phantom") {
+  async function connect(type: "metamask" | "walletconnect" | "coinbase" | "phantom") {
     setError("");
     setConnecting(type);
     try {
       if (type === "metamask") {
         const w = await connectMetaMask();
-        setWallet({
-          connected: true,
-          address: shortenAddress(w.address),
-          type: "metamask",
-          evmWallet: w,
-          solWallet: null,
-        });
+        setWallet({ connected: true, address: shortenAddress(w.address), type: "metamask", evmWallet: w, solWallet: null });
+        onClose();
+      } else if (type === "walletconnect") {
+        const w = await connectWalletConnect();
+        setWallet({ connected: true, address: shortenAddress(w.address), type: "walletconnect", evmWallet: w, solWallet: null });
         onClose();
       } else if (type === "coinbase") {
         const w = await connectCoinbase();
-        setWallet({
-          connected: true,
-          address: shortenAddress(w.address),
-          type: "coinbase",
-          evmWallet: w,
-          solWallet: null,
-        });
+        setWallet({ connected: true, address: shortenAddress(w.address), type: "coinbase", evmWallet: w, solWallet: null });
         onClose();
       } else if (type === "phantom") {
         const w = await connectPhantom();
-        setWallet({
-          connected: true,
-          address: w.publicKey.slice(0, 6) + "..." + w.publicKey.slice(-4),
-          type: "phantom",
-          evmWallet: null,
-          solWallet: w,
-        });
+        setWallet({ connected: true, address: w.publicKey.slice(0, 6) + "..." + w.publicKey.slice(-4), type: "phantom", evmWallet: null, solWallet: w });
         onClose();
       }
     } catch (err: any) {
@@ -123,10 +116,6 @@ function WalletModal({ onClose }: WalletModalProps) {
           ))}
         </div>
 
-        <div className="mt-4 p-3 bg-muted rounded text-xs text-muted-foreground">
-          WalletConnect — para activar necesitas un Project ID de WalletConnect Cloud (gratuito)
-        </div>
-
         <button
           onClick={onClose}
           className="mt-4 w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -157,6 +146,11 @@ export default function Header() {
     if (wallet.solWallet && typeof window !== "undefined" && window.solana) {
       window.solana.disconnect?.().catch(() => {});
     }
+    if (wallet.type === "walletconnect" && typeof window !== "undefined") {
+      const wc = (window as any).__wcProvider;
+      wc?.disconnect?.().catch(() => {});
+      delete (window as any).__wcProvider;
+    }
     setWallet({
       connected: false,
       address: "",
@@ -168,6 +162,7 @@ export default function Header() {
 
   const walletTypeColor: Record<string, string> = {
     metamask: "#F6851B",
+    walletconnect: "#3B99FC",
     coinbase: "#0052FF",
     phantom: "#AB9FF2",
   };
