@@ -2,8 +2,13 @@ import React, { useState } from "react";
 import { useApp } from "../context/AppContext";
 import { t } from "../lib/i18n";
 import { cn, shortenAddress } from "../lib/utils";
-import { Sun, Moon, Menu, Globe, ChevronDown, Wallet, LogOut } from "lucide-react";
+import { Sun, Moon, Menu, Globe, ChevronDown, Wallet, LogOut, Loader2, AlertTriangle } from "lucide-react";
 import type { Lang } from "../lib/i18n";
+import {
+  connectMetaMask,
+  connectCoinbase,
+  connectPhantom,
+} from "../lib/walletService";
 
 interface WalletModalProps {
   onClose: () => void;
@@ -11,39 +16,117 @@ interface WalletModalProps {
 
 function WalletModal({ onClose }: WalletModalProps) {
   const { lang, setWallet } = useApp();
+  const [connecting, setConnecting] = useState<string | null>(null);
+  const [error, setError] = useState("");
 
   const wallets = [
-    { key: "metamask", label: t(lang, "connect_metamask"), color: "#F6851B" },
-    { key: "walletconnect", label: t(lang, "connect_walletconnect"), color: "#3B99FC" },
-    { key: "coinbase", label: t(lang, "connect_coinbase"), color: "#0052FF" },
-    { key: "phantom", label: t(lang, "connect_phantom"), color: "#AB9FF2" },
-  ] as const;
+    {
+      key: "metamask" as const,
+      label: "MetaMask",
+      color: "#F6851B",
+      description: "Wallet EVM — Ethereum, Polygon, BNB...",
+    },
+    {
+      key: "coinbase" as const,
+      label: "Coinbase Wallet",
+      color: "#0052FF",
+      description: "Wallet EVM — Coinbase o compatible",
+    },
+    {
+      key: "phantom" as const,
+      label: "Phantom",
+      color: "#AB9FF2",
+      description: "Wallet Solana",
+    },
+  ];
 
-  function connect(type: "metamask" | "walletconnect" | "coinbase" | "phantom") {
-    const fakeAddress = `0x${Math.random().toString(16).slice(2, 12)}...${Math.random().toString(16).slice(2, 6)}`;
-    setWallet({ connected: true, address: fakeAddress, type });
-    onClose();
+  async function connect(type: "metamask" | "coinbase" | "phantom") {
+    setError("");
+    setConnecting(type);
+    try {
+      if (type === "metamask") {
+        const w = await connectMetaMask();
+        setWallet({
+          connected: true,
+          address: shortenAddress(w.address),
+          type: "metamask",
+          evmWallet: w,
+          solWallet: null,
+        });
+        onClose();
+      } else if (type === "coinbase") {
+        const w = await connectCoinbase();
+        setWallet({
+          connected: true,
+          address: shortenAddress(w.address),
+          type: "coinbase",
+          evmWallet: w,
+          solWallet: null,
+        });
+        onClose();
+      } else if (type === "phantom") {
+        const w = await connectPhantom();
+        setWallet({
+          connected: true,
+          address: w.publicKey.slice(0, 6) + "..." + w.publicKey.slice(-4),
+          type: "phantom",
+          evmWallet: null,
+          solWallet: w,
+        });
+        onClose();
+      }
+    } catch (err: any) {
+      setError(err.message || "Error al conectar wallet");
+    } finally {
+      setConnecting(null);
+    }
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={onClose}>
       <div
-        className="bg-card border border-border rounded-lg p-6 w-80 shadow-xl"
+        className="bg-card border border-border rounded-lg p-6 w-84 shadow-xl max-w-sm w-full mx-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-base font-semibold mb-4">{t(lang, "connect_wallet")}</h2>
+        <h2 className="text-base font-semibold mb-1">{t(lang, "connect_wallet")}</h2>
+        <p className="text-xs text-muted-foreground mb-4">
+          Conexion real — tus activos nunca salen de tu wallet
+        </p>
+
+        {error && (
+          <div className="flex items-start gap-2 text-destructive text-xs mb-4 bg-destructive/10 rounded p-3">
+            <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
         <div className="flex flex-col gap-2">
           {wallets.map((w) => (
             <button
               key={w.key}
               onClick={() => connect(w.key)}
-              className="flex items-center gap-3 px-4 py-3 rounded-lg border border-border hover:bg-accent transition-colors text-sm font-medium text-left"
+              disabled={!!connecting}
+              className="flex items-center gap-3 px-4 py-3 rounded-lg border border-border hover:bg-accent transition-colors text-sm font-medium text-left disabled:opacity-50"
             >
-              <div className="w-6 h-6 rounded-full" style={{ background: w.color }} />
-              {w.label}
+              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: w.color }}>
+                {connecting === w.key ? (
+                  <Loader2 size={14} className="animate-spin text-white" />
+                ) : (
+                  <Wallet size={14} className="text-white" />
+                )}
+              </div>
+              <div>
+                <div className="font-semibold text-xs">{w.label}</div>
+                <div className="text-xs text-muted-foreground font-normal">{w.description}</div>
+              </div>
             </button>
           ))}
         </div>
+
+        <div className="mt-4 p-3 bg-muted rounded text-xs text-muted-foreground">
+          WalletConnect — para activar necesitas un Project ID de WalletConnect Cloud (gratuito)
+        </div>
+
         <button
           onClick={onClose}
           className="mt-4 w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -70,6 +153,25 @@ export default function Header() {
     setTheme(theme === "dark" ? "light" : "dark");
   }
 
+  function disconnect() {
+    if (wallet.solWallet && typeof window !== "undefined" && window.solana) {
+      window.solana.disconnect?.().catch(() => {});
+    }
+    setWallet({
+      connected: false,
+      address: "",
+      type: null,
+      evmWallet: null,
+      solWallet: null,
+    });
+  }
+
+  const walletTypeColor: Record<string, string> = {
+    metamask: "#F6851B",
+    coinbase: "#0052FF",
+    phantom: "#AB9FF2",
+  };
+
   return (
     <>
       <header className="h-14 bg-card border-b border-border flex items-center justify-between px-4 z-20 sticky top-0">
@@ -84,7 +186,6 @@ export default function Header() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Language selector */}
           <div className="relative">
             <button
               onClick={() => setLangMenuOpen(!langMenuOpen)}
@@ -112,7 +213,6 @@ export default function Header() {
             )}
           </div>
 
-          {/* Theme toggle */}
           <button
             onClick={toggleTheme}
             className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
@@ -121,15 +221,17 @@ export default function Header() {
             {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
           </button>
 
-          {/* Wallet button */}
           {wallet.connected ? (
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-border text-xs font-mono">
-                <Wallet size={12} className="text-emerald-500" />
+                <div
+                  className="w-2 h-2 rounded-full"
+                  style={{ background: wallet.type ? walletTypeColor[wallet.type] : "#10b981" }}
+                />
                 <span>{wallet.address}</span>
               </div>
               <button
-                onClick={() => setWallet({ connected: false, address: "", type: null })}
+                onClick={disconnect}
                 className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
                 title={t(lang, "disconnect")}
               >

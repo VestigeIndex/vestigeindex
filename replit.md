@@ -1,5 +1,10 @@
 # Vestige Index — Plataforma Institucional de Criptomonedas
 
+## Repositorio GitHub
+
+https://github.com/VestigeIndex/vestigeindex
+(GitHub token almacenado como secreto — usar GITHUB_TOKEN para futuras actualizaciones)
+
 ## Descripcion
 
 Plataforma DeFi institucional sin KYC ni custodia. Permite comprar y vender top 100 criptomonedas e indices tokenizados, ver noticias del mercado, usar herramientas financieras, participar en la comunidad y leer el manifiesto filosofico.

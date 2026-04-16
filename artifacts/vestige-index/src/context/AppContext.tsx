@@ -1,12 +1,30 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import type { Lang } from "../lib/i18n";
+import type { BrowserProvider, JsonRpcSigner } from "ethers";
 
-type Theme = "dark" | "light";
+export type Theme = "dark" | "light";
 
-interface WalletState {
+export interface EVMWalletState {
+  provider: BrowserProvider;
+  signer: JsonRpcSigner;
+  address: string;
+  chainId: number;
+}
+
+export interface SolanaWalletState {
+  publicKey: string;
+  signTransaction: (tx: any) => Promise<any>;
+  signAndSendTransaction: (tx: any) => Promise<{ signature: string }>;
+}
+
+export type WalletType = "metamask" | "coinbase" | "phantom";
+
+export interface WalletState {
   connected: boolean;
   address: string;
-  type: "metamask" | "walletconnect" | "coinbase" | "phantom" | null;
+  type: WalletType | null;
+  evmWallet: EVMWalletState | null;
+  solWallet: SolanaWalletState | null;
 }
 
 interface AppContextType {
@@ -26,14 +44,18 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | null>(null);
 
+const DEFAULT_WALLET: WalletState = {
+  connected: false,
+  address: "",
+  type: null,
+  evmWallet: null,
+  solWallet: null,
+};
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("dark");
   const [lang, setLang] = useState<Lang>("es");
-  const [wallet, setWallet] = useState<WalletState>({
-    connected: false,
-    address: "",
-    type: null,
-  });
+  const [wallet, setWallet] = useState<WalletState>(DEFAULT_WALLET);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
   const [versionClickCount, setVersionClickCount] = useState(0);
@@ -41,15 +63,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   function setTheme(t: Theme) {
     setThemeState(t);
-    if (t === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
+    document.documentElement.classList.toggle("dark", t === "dark");
   }
 
   useEffect(() => {
     document.documentElement.classList.add("dark");
+
+    if (typeof window !== "undefined" && window.ethereum) {
+      window.ethereum.on?.("accountsChanged", (accounts: string[]) => {
+        if (!accounts.length) {
+          setWallet(DEFAULT_WALLET);
+        }
+      });
+      window.ethereum.on?.("chainChanged", () => {
+        window.location.reload();
+      });
+    }
+    if (typeof window !== "undefined" && window.solana) {
+      window.solana.on?.("disconnect", () => {
+        setWallet((w) => w.type === "phantom" ? DEFAULT_WALLET : w);
+      });
+    }
   }, []);
 
   function handleVersionClick() {
