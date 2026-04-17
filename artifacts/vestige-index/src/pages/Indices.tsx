@@ -4,9 +4,10 @@ import { t } from "../lib/i18n";
 import { useIndexPrices } from "../hooks/usePrices";
 import { useIndexHistory } from "../hooks/useIndexHistory";
 import { formatCurrency, formatPercent, cn } from "../lib/utils";
-import { TrendingUp, TrendingDown, Loader2, ChevronDown, ChevronRight, ExternalLink, Info } from "lucide-react";
+import { TrendingUp, TrendingDown, Loader2, ChevronDown, ChevronRight, ExternalLink, Info, X, BarChart3 } from "lucide-react";
 import SwapModal from "../components/SwapModal";
 import PriceChart from "../components/PriceChart";
+import TradingChart from "../components/TradingChart";
 import { TOKENIZED_INDICES, CATEGORIES, categoryColors, type TokenizedIndex } from "../config/indices";
 import { INDEX_FEE } from "../lib/constants";
 
@@ -17,19 +18,26 @@ interface SwapTarget {
   image?: string;
 }
 
+interface ChartData {
+  symbol: string;
+  name: string;
+}
+
 // Index Card Component with expandable chart
 function IndexCard({ 
   index, 
   price, 
   change, 
   onBuy, 
-  onSell 
+  onSell,
+  onChart 
 }: { 
   index: TokenizedIndex; 
   price: number; 
   change: number;
   onBuy: () => void;
   onSell: () => void;
+  onChart: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const { data: historyData, loading: historyLoading } = useIndexHistory(index.coinGeckoId, 30);
@@ -104,6 +112,12 @@ function IndexCard({
 
         <div className="flex gap-1.5 mt-auto">
           <button
+            onClick={onChart}
+            className="flex-1 py-1.5 bg-blue-600 text-white text-xs rounded font-medium hover:bg-blue-700 transition-colors"
+          >
+            📊 Gráfico
+          </button>
+          <button
             onClick={onBuy}
             className="flex-1 py-1.5 bg-emerald-600 text-white text-xs rounded font-medium hover:bg-emerald-700 transition-colors"
           >
@@ -167,6 +181,7 @@ export default function Indices() {
   const [swapTarget, setSwapTarget] = useState<SwapTarget | null>(null);
   const [swapMode, setSwapMode] = useState<"buy" | "sell">("buy");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedChart, setSelectedChart] = useState<ChartData | null>(null);
 
   const filteredIndices = useMemo(() => {
     if (!selectedCategory) return TOKENIZED_INDICES;
@@ -181,6 +196,10 @@ export default function Indices() {
       price: priceData?.price ?? 0,
     });
     setSwapMode(mode);
+  }
+
+  function openChart(item: TokenizedIndex) {
+    setSelectedChart({ symbol: item.symbol, name: item.name });
   }
 
   return (
@@ -233,6 +252,7 @@ export default function Indices() {
                 change={change}
                 onBuy={() => openSwap(item, "buy")}
                 onSell={() => openSwap(item, "sell")}
+                onChart={() => openChart(item)}
               />
             );
           })}
@@ -246,6 +266,28 @@ export default function Indices() {
           feeRate={INDEX_FEE}
           onClose={() => setSwapTarget(null)}
         />
+      )}
+
+      {selectedChart && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={() => setSelectedChart(null)}>
+          <div className="bg-background rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden m-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">📈</span>
+                <div>
+                  <h2 className="text-lg font-bold">{selectedChart.name}</h2>
+                  <p className="text-xs text-muted-foreground">{selectedChart.symbol}/USDT</p>
+                </div>
+              </div>
+              <button onClick={() => setSelectedChart(null)} className="p-2 hover:bg-muted rounded">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-4">
+              <TradingChart symbol={selectedChart.symbol} height={500} />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
