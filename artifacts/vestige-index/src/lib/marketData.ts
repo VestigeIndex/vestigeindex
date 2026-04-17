@@ -1,21 +1,22 @@
 // Vestige Index - Multi-source market data with caching
 // Sources: Binance (primary), CoinGecko (fallback)
-// Cache: 30min for CoinGecko, 30s for Binance
+// Cache: 5min localStorage, 2min refresh interval
 
 const BINANCE_API = "https://api.binance.com/api/v3";
 const COINGECKO_API = "https://api.coingecko.com/api/v3";
 
-// LocalStorage keys for persistent caching
+// LocalStorage keys for persistent caching (survives page refresh)
 const CACHE_KEYS = {
   BINANCE: "vestige_binance_cache",
   COINGECKO: "vestige_coingecko_cache",
   MARKET: "vestige_market_data",
 };
 
+// Cache durations
 const CACHE_DURATION = {
-  BINANCE: 60 * 1000, // 1 minute
-  COINGECKO: 30 * 60 * 1000, // 30 minutes
-  MARKET: 60 * 1000, // 1 minute
+  BINANCE: 5 * 60 * 1000, // 5 minutes
+  COINGECKO: 5 * 60 * 1000, // 5 minutes  
+  MARKET: 5 * 60 * 1000, // 5 minutes
 };
 
 // Helper functions for localStorage cache
@@ -36,6 +37,24 @@ function setCache<T>(key: string, data: T): void {
   try {
     localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
   } catch {}
+}
+
+// Retry helper with exponential backoff
+async function fetchWithRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries = 3
+): Promise<T> {
+  let lastError: Error | null = null;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastError = e as Error;
+      // Wait before retry: 1s, 2s, 4s (exponential backoff)
+      await new Promise(r => setTimeout(r, 1000 * Math.pow(2, i)));
+    }
+  }
+  throw lastError;
 }
 
 // Common token icons mapping
@@ -133,8 +152,9 @@ let coinGeckoCache: {
   timestamp: number;
 } | null = null;
 
-const CACHE_BINANCE = 30 * 1000; // 30 seconds
-const CACHE_COINGECKO = 30 * 60 * 1000; // 30 minutes
+// Cache durations: 5 minutes for both (as per requirements)
+const CACHE_BINANCE = 5 * 60 * 1000; // 5 minutes
+const CACHE_COINGECKO = 5 * 60 * 1000; // 5 minutes
 
 export interface TokenData {
   id: string;
@@ -150,15 +170,24 @@ export interface TokenData {
   sparkline_in_7d?: { price: number[] };
 }
 
-// Get Binance prices (fast, update every 30s)
+// Get Binance prices with localStorage persistence + retry
 export async function getBinancePrices(): Promise<Record<string, { price: number; change: number; volume: number }>> {
-  // Check cache
+  // Check localStorage cache first (persistent)
+  const cachedData = getCache<Record<string, { price: number; change: number; volume: number }>>(
+    CACHE_KEYS.BINANCE, 
+    CACHE_DURATION.BINANCE
+  );
+  if (cachedData) {
+    return cachedData;
+  }
+
+  // Check memory cache
   if (binanceCache && Date.now() - binanceCache.timestamp < CACHE_BINANCE) {
     return binanceCache.prices;
   }
 
   try {
-    const response = await fetch(`${BINANCE_API}/ticker/24hr`);
+    const response = await fetchWithRetry(() => fetch(`${BINANCE_API}/ticker/24hr`));
     const data = await response.json();
 
     const prices: Record<string, { price: number; change: number; volume: number }> = {};
@@ -174,25 +203,35 @@ export async function getBinancePrices(): Promise<Record<string, { price: number
       }
     }
 
-    // Update cache
+    // Update caches
     binanceCache = { prices, timestamp: Date.now() };
+    setCache(CACHE_KEYS.BINANCE, prices);
     return prices;
   } catch (error) {
     console.error("Binance API error:", error);
+    // Return cache on error or empty object
     return binanceCache?.prices || {};
   }
 }
 
-// Get CoinGecko top tokens (slow, cache for 30min)
+// Get CoinGecko top tokens with localStorage persistence + retry
 export async function getCoinGeckoTop250(page = 1): Promise<any[]> {
-  // Check cache
+  // Check localStorage cache first (only for page 1)
+  if (page === 1) {
+    const cachedData = getCache<any[]>(CACHE_KEYS.COINGECKO, CACHE_DURATION.COINGECKO);
+    if (cachedData) {
+      return cachedData;
+    }
+  }
+
+  // Check memory cache
   if (coinGeckoCache && Date.now() - coinGeckoCache.timestamp < CACHE_COINGECKO && page === 1) {
     return coinGeckoCache.tokens;
   }
 
   try {
     const url = `${COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=${page}&sparkline=false&price_change_percentage=1h,24h,7d,30d`;
-    const response = await fetch(url);
+    const response = await fetchWithRetry(() => fetch(url));
     
     if (!response.ok) {
       throw new Error(`CoinGecko error: ${response.status}`);
@@ -200,15 +239,25 @@ export async function getCoinGeckoTop250(page = 1): Promise<any[]> {
     
     const data = await response.json();
 
-    // Cache first page
+    // Cache first page in both memory and localStorage
     if (page === 1) {
       coinGeckoCache = { tokens: data, timestamp: Date.now() };
+      setCache(CACHE_KEYS.COINGECKO, data);
     }
     
     return data;
   } catch (error) {
     console.error("CoinGecko API error:", error);
-    return coinGeckoCache?.tokens || [];
+    // Try to return cache on error
+    if (coinGeckoCache?.tokens) {
+      return coinGeckoCache.tokens;
+    }
+    // Try localStorage as fallback
+    const cachedData = getCache<any[]>(CACHE_KEYS.COINGECKO, Infinity);
+    if (cachedData) {
+      return cachedData;
+    }
+    return [];
   }
 }
 

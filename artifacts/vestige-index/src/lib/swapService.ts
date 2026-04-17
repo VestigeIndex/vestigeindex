@@ -1,7 +1,11 @@
 import { BrowserProvider, JsonRpcSigner, parseUnits, formatUnits } from "ethers";
 import { SOL_FEE_ADDRESS } from "./constants";
 
+// Swap API - Primary swap aggregator
 const SWAP_API = "https://api.swapapi.dev/v1";
+
+// API Base for legacy functions (keeping for compatibility)
+const API_BASE = "https://api.swapapi.dev/v1";
 
 export const NATIVE_ETH = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 export const USDT_MAINNET = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
@@ -202,7 +206,7 @@ function getChainName(chainId: number): string {
   return chains[chainId] || "ethereum";
 }
 
-// Legacy function - uses the multi-chain system
+// Get swap quote from Swap API
 export async function getQuote(
   srcTokenAddress: string,
   dstTokenAddress: string,
@@ -211,6 +215,29 @@ export async function getQuote(
   sender: string = "0x0000000000000000000000000000000000000000"
 ): Promise<SwapQuote> {
   try {
+    // Try Swap API first (primary)
+    const params = new URLSearchParams({
+      src: srcTokenAddress,
+      dst: dstTokenAddress,
+      amount: amountWei,
+      from: sender,
+      chainId: chainId.toString(),
+    });
+    
+    const resp = await fetch(`${SWAP_API}/swap/quote?${params}`);
+    if (resp.ok) {
+      const data = await resp.json();
+      return {
+        dstAmount: data.dstAmount || "0",
+        dstAmountFormatted: data.dstAmountFormatted || (parseInt(data.dstAmount || "0") / 1e18).toFixed(6),
+        gas: data.gas || 150000,
+        protocols: data.protocols,
+        toToken: { symbol: data.toToken?.symbol || "UNKNOWN", decimals: data.toToken?.decimals || 18 },
+        fromToken: { symbol: data.fromToken?.symbol || "UNKNOWN", decimals: data.fromToken?.decimals || 18 },
+      };
+    }
+    
+    // Fallback to multi-chain system
     const result = await getMultiChainQuote(
       srcTokenAddress,
       dstTokenAddress,
@@ -228,7 +255,7 @@ export async function getQuote(
       fromToken: { symbol: "UNKNOWN", decimals: 18 },
     };
   } catch (error: any) {
-    console.error("All swaps failed:", error.message);
+    console.error("Swap quote failed:", error.message);
     throw new Error(error.message || "No swap available");
   }
 }
@@ -249,7 +276,7 @@ export async function buildSwapTx(
     slippage,
     chainId: chainId.toString(),
   });
-  const resp = await fetch(`${API_BASE}/swap/build?${params}`);
+  const resp = await fetch(`${SWAP_API}/swap/build?${params}`);
   if (!resp.ok) {
     const err = await resp.json();
     throw new Error(err.description || err.error || "Swap build failed");
@@ -265,7 +292,7 @@ export async function checkAllowance(
   chainId = 1
 ): Promise<bigint> {
   const params = new URLSearchParams({ tokenAddress, walletAddress, chainId: chainId.toString() });
-  const resp = await fetch(`${API_BASE}/swap/approve/allowance?${params}`);
+  const resp = await fetch(`${SWAP_API}/swap/approve/allowance?${params}`);
   const data = await resp.json();
   return BigInt(data.allowance ?? "0");
 }
@@ -276,7 +303,7 @@ export async function getApproveTx(
   chainId = 1
 ): Promise<any> {
   const params = new URLSearchParams({ tokenAddress, amount, chainId: chainId.toString() });
-  const resp = await fetch(`${API_BASE}/swap/approve/transaction?${params}`);
+  const resp = await fetch(`${SWAP_API}/swap/approve/transaction?${params}`);
   return resp.json();
 }
 

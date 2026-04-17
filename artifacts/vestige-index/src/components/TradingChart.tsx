@@ -81,27 +81,71 @@ export default function TradingChart({
     
     try {
       const limit = Math.min(selectedRange.days * 24, 500); // Max 500 candles
-      const url = `https://api.binance.com/api/v3/klines?symbol=${symbol.toUpperCase()}USDT&interval=${selectedRange.interval}&limit=${limit}`;
+      const upperSymbol = symbol.toUpperCase();
       
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error("Failed to fetch data");
+      // Get the proper Binance symbol (try mapped first, then direct)
+      let binanceSymbol = getBinanceSymbol(upperSymbol);
+      
+      // If not found in map, try direct format
+      if (!binanceSymbol) {
+        binanceSymbol = `${upperSymbol}USDT`;
       }
       
-      const klines = await response.json();
-      const candleData: CandleData[] = klines.map((k: any) => ({
-        time: Math.floor(k[0] / 1000),
-        open: parseFloat(k[1]),
-        high: parseFloat(k[2]),
-        low: parseFloat(k[3]),
-        close: parseFloat(k[4]),
-        volume: parseFloat(k[5]),
-      }));
+      const url = `https://api.binance.com/api/v3/klines?symbol=${binanceSymbol}&interval=${selectedRange.interval}&limit=${limit}`;
       
-      setData(candleData);
+      // Retry with exponential backoff
+      let lastError: Error | null = null;
+      for (let i = 0; i < 3; i++) {
+        try {
+          const response = await fetch(url);
+          if (!response.ok) {
+            // Try alternative symbol format if 400 error
+            if (response.status === 400 && i === 0) {
+              // Try with different base asset
+              const altSymbol = `${upperSymbol.toUpperCase()}USDT`;
+              const altUrl = `https://api.binance.com/api/v3/klines?symbol=${altSymbol}&interval=${selectedRange.interval}&limit=${limit}`;
+              const altResponse = await fetch(altUrl);
+              if (altResponse.ok) {
+                const klines = await altResponse.json();
+                const candleData: CandleData[] = klines.map((k: any) => ({
+                  time: Math.floor(k[0] / 1000),
+                  open: parseFloat(k[1]),
+                  high: parseFloat(k[2]),
+                  low: parseFloat(k[3]),
+                  close: parseFloat(k[4]),
+                  volume: parseFloat(k[5]),
+                }));
+                setData(candleData);
+                setLoading(false);
+                return;
+              }
+            }
+            throw new Error("Failed to fetch data");
+          }
+          
+          const klines = await response.json();
+          const candleData: CandleData[] = klines.map((k: any) => ({
+            time: Math.floor(k[0] / 1000),
+            open: parseFloat(k[1]),
+            high: parseFloat(k[2]),
+            low: parseFloat(k[3]),
+            close: parseFloat(k[4]),
+            volume: parseFloat(k[5]),
+          }));
+          
+          setData(candleData);
+          setLoading(false);
+          return;
+        } catch (e) {
+          lastError = e as Error;
+          // Wait before retry: 1s, 2s
+          await new Promise(r => setTimeout(r, 1000 * Math.pow(2, i)));
+        }
+      }
+      throw lastError;
     } catch (err: any) {
       console.error("Chart data error:", err);
-      setError(err.message || "Error loading chart");
+      setError("No hay datos de gráfico disponibles para este token");
     } finally {
       setLoading(false);
     }

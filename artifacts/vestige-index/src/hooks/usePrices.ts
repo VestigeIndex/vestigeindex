@@ -25,7 +25,8 @@ export function usePrices(page = 1, perPage = 1000) {
 
   useEffect(() => {
     fetchCoins();
-    const id = setInterval(fetchCoins, 60000);
+    // Update every 2 minutes (reducing from 60s to avoid rate limits)
+    const id = setInterval(fetchCoins, 120000);
     return () => clearInterval(id);
   }, [fetchCoins]);
 
@@ -131,7 +132,8 @@ export function useTicker() {
 
   useEffect(() => {
     fetchTicker();
-    const id = setInterval(fetchTicker, 30000);
+    // Update every 2 minutes (reducing from 30s to avoid rate limits)
+    const id = setInterval(fetchTicker, 120000);
     return () => clearInterval(id);
   }, [fetchTicker]);
 
@@ -189,7 +191,8 @@ export function useIndexPrices() {
 
   useEffect(() => {
     fetchIndexPrices();
-    const id = setInterval(fetchIndexPrices, 60000);
+    // Update every 2 minutes (reducing from 60s to avoid rate limits)
+    const id = setInterval(fetchIndexPrices, 120000);
     return () => clearInterval(id);
   }, [fetchIndexPrices]);
 
