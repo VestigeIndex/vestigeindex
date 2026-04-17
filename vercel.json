@@ -2,6 +2,10 @@
   "version": 2,
   "builds": [
     {
+      "src": "artifacts/vestige-index/api/**/*",
+      "use": "@vercel/node"
+    },
+    {
       "src": "artifacts/vestige-index/**/*",
       "use": "@vercel/static"
     }
