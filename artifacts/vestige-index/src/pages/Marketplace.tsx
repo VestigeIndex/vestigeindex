@@ -16,7 +16,7 @@ interface SwapTarget {
 
 export default function Marketplace() {
   const { lang } = useApp();
-  const { coins, loading, error } = usePrices(1, 100);
+  const { coins, loading, error } = usePrices(1, 1000);
   const [search, setSearch] = useState("");
   const [swapTarget, setSwapTarget] = useState<SwapTarget | null>(null);
   const [swapMode, setSwapMode] = useState<"buy" | "sell">("buy");
@@ -37,7 +37,7 @@ export default function Marketplace() {
       {/* Page header */}
       <div className="px-6 py-5 border-b border-border">
         <h1 className="text-lg font-bold tracking-tight">{t(lang, "marketplace")}</h1>
-        <p className="text-xs text-muted-foreground mt-0.5">{t(lang, "top100")} — {t(lang, "fee_label_top")}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{t(lang, "top1000")} — {t(lang, "fee_label_top")}</p>
       </div>
 
       {/* Search */}
