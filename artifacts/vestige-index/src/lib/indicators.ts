@@ -1,7 +1,14 @@
 // Technical Indicators for Charts
 // Free calculations, no API key required
 
-import type { CandleData } from "../components/TradingChart";
+export interface CandleData {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume?: number;
+}
 
 /**
  * Calculate Simple Moving Average (SMA)

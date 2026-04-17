@@ -3,19 +3,11 @@ import { createChart, ColorType, CrosshairMode } from "lightweight-charts";
 import { 
   calculateSMA, 
   calculateBollingerBands, 
-  calculateRSI, 
-  getFearGreedIndex,
-  getOnChainData 
+  getOnChainData,
+  type CandleData 
 } from "../lib/indicators";
 
-export interface CandleData {
-  time: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume?: number;
-}
+export type { CandleData };
 
 interface TradingChartProps {
   symbol: string;

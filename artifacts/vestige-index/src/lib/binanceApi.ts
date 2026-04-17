@@ -5,7 +5,7 @@
 const BINANCE_API_BASE = "https://api.binance.com/api/v3";
 
 // Cache for klines data (reduce API calls)
-const klinesCache: {
+let klinesCache: {
   data: KlineData[];
   timestamp: number;
   symbol: string;
