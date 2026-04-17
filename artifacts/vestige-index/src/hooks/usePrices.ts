@@ -182,7 +182,7 @@ export function useIndexPrices() {
         result[symbol] = { price: d.usd ?? 0, change: d.usd_24h_change ?? 0 };
       }
       setPrices(result);
-    } catch {
+    } catch (err) {
       console.error("Failed to fetch index prices:", err);
     }
   }, []);
