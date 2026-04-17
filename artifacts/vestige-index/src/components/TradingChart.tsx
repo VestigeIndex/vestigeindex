@@ -1,5 +1,12 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { createChart, ColorType, CrosshairMode } from "lightweight-charts";
+import { 
+  calculateSMA, 
+  calculateBollingerBands, 
+  calculateRSI, 
+  getFearGreedIndex,
+  getOnChainData 
+} from "../lib/indicators";
 
 export interface CandleData {
   time: number;
@@ -74,6 +81,17 @@ export default function TradingChart({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedRange, setSelectedRange] = useState(TIME_RANGES[2]); // Default 1M
+  
+  // Technical indicators
+  const [showSMA7, setShowSMA7] = useState(true);
+  const [showSMA14, setShowSMA14] = useState(true);
+  const [showSMA21, setShowSMA21] = useState(false);
+  const [showBollinger, setShowBollinger] = useState(true);
+  const [showRSI, setShowRSI] = useState(false);
+  
+  // Sentiment data
+  const [fearGreed, setFearGreed] = useState<{ value: number; label: string } | null>(null);
+  const [openInterest, setOpenInterest] = useState<{ openInterest: number; change24h: number } | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -99,6 +117,11 @@ export default function TradingChart({
       }));
       
       setData(candleData);
+      
+      // Fetch sentiment data
+      const sentiment = await getOnChainData(symbol);
+      if (sentiment.fearGreed) setFearGreed(sentiment.fearGreed);
+      if (sentiment.openInterest) setOpenInterest(sentiment.openInterest);
     } catch (err: any) {
       console.error("Chart data error:", err);
       setError(err.message || "Error loading chart");
@@ -173,6 +196,63 @@ export default function TradingChart({
       low: d.low,
       close: d.close,
     })));
+
+    // Calculate and add SMA lines
+    if (showSMA7) {
+      const sma7 = calculateSMA(data, 7);
+      const sma7Series = chart.addLineSeries({
+        color: "#f59e0b",
+        lineWidth: 1,
+        crosshairMarkerVisible: false,
+        lastPriceAnimation: 0,
+      });
+      sma7Series.setData(sma7);
+    }
+    
+    if (showSMA14) {
+      const sma14 = calculateSMA(data, 14);
+      const sma14Series = chart.addLineSeries({
+        color: "#8b5cf6",
+        lineWidth: 1,
+        crosshairMarkerVisible: false,
+        lastPriceAnimation: 0,
+      });
+      sma14Series.setData(sma14);
+    }
+    
+    if (showSMA21) {
+      const sma21 = calculateSMA(data, 21);
+      const sma21Series = chart.addLineSeries({
+        color: "#ec4899",
+        lineWidth: 1,
+        crosshairMarkerVisible: false,
+        lastPriceAnimation: 0,
+      });
+      sma21Series.setData(sma21);
+    }
+
+    // Calculate and add Bollinger Bands
+    if (showBollinger) {
+      const bb = calculateBollingerBands(data, 20, 2);
+      
+      const bbUpperSeries = chart.addLineSeries({
+        color: "#06b6d420",
+        lineWidth: 1,
+        crosshairMarkerVisible: false,
+        lastPriceAnimation: 0,
+        lineStyle: 2,
+      });
+      bbUpperSeries.setData(bb.upper);
+      
+      const bbLowerSeries = chart.addLineSeries({
+        color: "#06b6d420",
+        lineWidth: 1,
+        crosshairMarkerVisible: false,
+        lastPriceAnimation: 0,
+        lineStyle: 2,
+      });
+      bbLowerSeries.setData(bb.lower);
+    }
 
     // Volume series
     const volumeSeries = chart.addHistogramSeries({
@@ -250,6 +330,59 @@ export default function TradingChart({
           🔄
         </button>
       </div>
+
+      {/* Indicator toggles */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap text-xs">
+        <span className="text-muted-foreground mr-1">Ind:</span>
+        <button
+          onClick={() => setShowSMA7(!showSMA7)}
+          className={`px-2 py-0.5 rounded ${showSMA7 ? "bg-amber-500/80 text-white" : "bg-muted"}`}
+        >
+          SMA7
+        </button>
+        <button
+          onClick={() => setShowSMA14(!showSMA14)}
+          className={`px-2 py-0.5 rounded ${showSMA14 ? "bg-violet-500/80 text-white" : "bg-muted"}`}
+        >
+          SMA14
+        </button>
+        <button
+          onClick={() => setShowSMA21(!showSMA21)}
+          className={`px-2 py-0.5 rounded ${showSMA21 ? "bg-pink-500/80 text-white" : "bg-muted"}`}
+        >
+          SMA21
+        </button>
+        <button
+          onClick={() => setShowBollinger(!showBollinger)}
+          className={`px-2 py-0.5 rounded ${showBollinger ? "bg-cyan-500/80 text-white" : "bg-muted"}`}
+        >
+          BB
+        </button>
+      </div>
+
+      {/* Sentiment data */}
+      {(fearGreed || openInterest) && (
+        <div className="flex items-center gap-4 mb-3 text-xs">
+          {fearGreed && (
+            <div className={`px-2 py-1 rounded ${
+              fearGreed.value <= 25 ? "bg-red-500/80" :
+              fearGreed.value <= 45 ? "bg-orange-500/80" :
+              fearGreed.value <= 55 ? "bg-yellow-500/80" :
+              fearGreed.value <= 75 ? "bg-lime-500/80" : "bg-green-500/80"
+            } text-white`}>
+              😱 {fearGreed.value} - {fearGreed.label}
+            </div>
+          )}
+          {openInterest && (
+            <div className="px-2 py-1 rounded bg-muted">
+              📊 OI: {(openInterest.openInterest / 1000000).toFixed(1)}M
+              <span className={openInterest.change24h >= 0 ? "text-green-500 ml-1" : "text-red-500 ml-1"}>
+                {openInterest.change24h >= 0 ? "+" : ""}{openInterest.change24h.toFixed(1)}%
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Chart container */}
       <div ref={containerRef} className="w-full" style={{ height }} />
