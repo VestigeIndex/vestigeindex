@@ -1,11 +1,14 @@
 import { BrowserProvider, JsonRpcSigner, parseUnits, formatUnits } from "ethers";
 import { SOL_FEE_ADDRESS } from "./constants";
 
-const API_BASE = "/api";
+const SWAP_API = "https://api.swapapi.dev/v1";
 
 export const NATIVE_ETH = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 export const USDT_MAINNET = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
 export const USDC_MAINNET = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+export const NATIVE_BNB = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+export const NATIVE_MATIC = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+export const NATIVE_AVAX = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 
 export interface SwapQuote {
   dstAmount: string;
@@ -61,33 +64,37 @@ export async function getQuote(
   srcTokenAddress: string,
   dstTokenAddress: string,
   amountWei: string,
-  chainId = 1
+  chainId = 1,
+  sender: string = "0x0000000000000000000000000000000000000000"
 ): Promise<SwapQuote> {
-  const params = new URLSearchParams({
-    src: srcTokenAddress,
-    dst: dstTokenAddress,
-    amount: amountWei,
-    chainId: chainId.toString(),
-  });
-  const resp = await fetch(`${API_BASE}/swap/quote?${params}`);
-  if (!resp.ok) {
-    const err = await resp.json();
-    throw new Error(err.description || err.error || "Quote failed");
+  try {
+    // Use Swap API directly
+    const url = `${SWAP_API}/swap/${chainId}?tokenIn=${srcTokenAddress}&tokenOut=${dstTokenAddress}&amount=${amountWei}&sender=${sender}`;
+    const resp = await fetch(url);
+    
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ description: "Quote failed" }));
+      throw new Error(err.description || "Quote failed");
+    }
+    
+    const data = await resp.json();
+    
+    if (!data.success) {
+      throw new Error(data.message || "Swap failed");
+    }
+
+    return {
+      dstAmount: data.data?.tx?.dstAmount || "0",
+      dstAmountFormatted: data.data?.dstAmountFormatted || "0",
+      gas: data.data?.gas || 0,
+      protocols: data.data?.protocols,
+      toToken: data.data?.toToken,
+      fromToken: data.data?.fromToken,
+    };
+  } catch (error: any) {
+    console.error("getQuote error:", error);
+    throw new Error(error.message || "Failed to get quote");
   }
-  const data = await resp.json();
-  if (data.error) throw new Error(data.description || data.error);
-
-  const decimals = data.dstToken?.decimals ?? 18;
-  const dstAmountFormatted = formatUnits(data.dstAmount, decimals);
-
-  return {
-    dstAmount: data.dstAmount,
-    dstAmountFormatted,
-    gas: data.gas,
-    protocols: data.protocols,
-    toToken: data.dstToken,
-    fromToken: data.srcToken,
-  };
 }
 
 export async function buildSwapTx(

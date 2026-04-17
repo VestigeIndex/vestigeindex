@@ -92,7 +92,8 @@ export default function SwapModal({ coin, mode, feeRate = TOP100_FEE, onClose }:
           srcToken!.address,
           dstToken!.address,
           amountWei,
-          wallet.evmWallet!.chainId
+          wallet.evmWallet!.chainId,
+          wallet.evmWallet!.address
         );
         setQuote(q);
         setStatus("idle");
