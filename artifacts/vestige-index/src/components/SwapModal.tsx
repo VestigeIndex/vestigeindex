@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useApp } from "../context/AppContext";
 import { t } from "../lib/i18n";
-import { EVM_FEE_ADDRESS, SOL_FEE_ADDRESS, TOP100_FEE } from "../lib/constants";
+import { EVM_FEE_ADDRESS, SOL_FEE_ADDRESS, TOP100_FEE, INDEX_FEE } from "../lib/constants";
 import { formatCurrency } from "../lib/utils";
 import { X, ArrowDownUp, AlertCircle, CheckCircle2, Loader2, ExternalLink, RefreshCw } from "lucide-react";
 import {
@@ -129,13 +129,15 @@ export default function SwapModal({ coin, mode, feeRate = TOP100_FEE, onClose }:
     try {
       if (isEVMWallet && srcToken && dstToken && wallet.evmWallet) {
         const ethPriceForUsd = 3000;
+        const isIndexFee = feeRate === INDEX_FEE;
         const hash = await executeEVMSwap(
           wallet.evmWallet.signer,
           srcToken,
           dstToken,
           netUsd,
           ethPriceForUsd,
-          wallet.evmWallet.chainId
+          wallet.evmWallet.chainId,
+          isIndexFee
         );
         setTxHash(hash);
         setStatus("success");

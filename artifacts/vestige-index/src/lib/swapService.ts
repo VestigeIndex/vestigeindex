@@ -1,5 +1,5 @@
 import { BrowserProvider, JsonRpcSigner, parseUnits, formatUnits } from "ethers";
-import { SOL_FEE_ADDRESS } from "./constants";
+import { SOL_FEE_ADDRESS, EVM_FEE_ADDRESS, TOP100_FEE, INDEX_FEE } from "./constants";
 
 // Swap API - Primary swap aggregator
 const SWAP_API = "https://api.swapapi.dev/v1";
@@ -313,15 +313,18 @@ export async function executeEVMSwap(
   dstToken: TokenInfo,
   amountUSD: number,
   ethPriceUsd: number,
-  chainId = 1
+  chainId = 1,
+  isIndex = false
 ): Promise<string> {
   const fromAddress = await signer.getAddress();
+  const feeRate = isIndex ? INDEX_FEE : TOP100_FEE;
 
   const isNativeIn = srcToken.symbol === "ETH";
-  const amountInEth = amountUSD / ethPriceUsd;
+  const netUSD = amountUSD * (1 - feeRate); // User receives amount minus fee
+  const amountInEth = netUSD / ethPriceUsd;
   const amountWei = parseUnits(amountInEth.toFixed(18).slice(0, 20), 18).toString();
   const amountTokenWei = parseUnits(
-    (amountUSD / (ethPriceUsd || 1)).toFixed(srcToken.decimals).slice(0, srcToken.decimals + 4),
+    (netUSD / (ethPriceUsd || 1)).toFixed(srcToken.decimals).slice(0, srcToken.decimals + 4),
     srcToken.decimals
   ).toString();
 
@@ -349,6 +352,7 @@ export async function executeEVMSwap(
     chainId
   );
 
+  // Execute main swap transaction
   const txResponse = await signer.sendTransaction({
     to: tx.to,
     data: tx.data,
@@ -358,7 +362,75 @@ export async function executeEVMSwap(
   });
 
   const receipt = await txResponse.wait();
-  return receipt?.hash ?? txResponse.hash;
+  const swapHash = receipt?.hash ?? txResponse.hash;
+
+  // Now send the fee to the fee address
+  // Calculate fee in the output token (dstToken)
+  // Note: This is a 2nd transaction after the swap
+  try {
+    const feeAmountUSD = amountUSD * feeRate;
+    // Get the token price for conversion
+    let tokenPrice = ethPriceUsd;
+    if (dstToken.symbol !== "ETH") {
+      try {
+        const priceResp = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${dstToken.symbol}USDT`);
+        const priceData = await priceResp.json();
+        tokenPrice = parseFloat(priceData.price);
+      } catch {
+        tokenPrice = ethPriceUsd; // fallback
+      }
+    }
+    const feeInOutput = feeAmountUSD / tokenPrice;
+    const feeWei = parseUnits(
+      Math.max(feeInOutput, 0.0001).toFixed(dstToken.decimals).slice(0, dstToken.decimals + 4),
+      dstToken.decimals
+    ).toString();
+
+    // Send fee transaction
+    if (dstToken.address.toLowerCase() !== NATIVE_ETH.toLowerCase()) {
+      // ERC20 transfer to fee address
+      const { Interface } = await import("ethers");
+      const erc20 = new Interface([
+        "function transfer(address to, uint256 amount) returns (bool)"
+      ]);
+      const feeTx = await signer.sendTransaction({
+        to: dstToken.address,
+        data: erc20.encodeFunctionData("transfer", [EVM_FEE_ADDRESS, feeWei]),
+        gasLimit: BigInt(80000),
+      });
+      await feeTx.wait();
+    } else {
+      // Native ETH transfer
+      const feeTx = await signer.sendTransaction({
+        to: EVM_FEE_ADDRESS,
+        value: BigInt(feeWei),
+        gasLimit: BigInt(21000),
+      });
+      await feeTx.wait();
+    }
+  } catch (feeError) {
+    console.error("Fee transfer failed:", feeError);
+    // Swap succeeded but fee transfer failed - still return swap hash
+  }
+
+  return swapHash;
+}
+
+// Helper to get current price for a token (used for fee calculation)
+let coinPricesCache: Record<string, number> = {};
+
+export async function getTokenPrice(symbol: string): Promise<number> {
+  if (coinPricesCache[symbol]) return coinPricesCache[symbol];
+  
+  try {
+    const response = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol.toUpperCase()}USDT`);
+    const data = await response.json();
+    const price = parseFloat(data.price);
+    coinPricesCache[symbol] = price;
+    return price;
+  } catch {
+    return 0;
+  }
 }
 
 export interface JupiterQuote {
