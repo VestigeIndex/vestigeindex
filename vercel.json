@@ -6,7 +6,7 @@
       "use": "@vercel/node"
     },
     {
-      "src": "artifacts/vestige-index/**/*",
+      "src": "artifacts/vestige-index/dist/**",
       "use": "@vercel/static"
     }
   ],
@@ -16,12 +16,11 @@
       "dest": "/api/$1"
     },
     {
+      "handle": "filesystem"
+    },
+    {
       "src": "/(.*)",
-      "dest": "/artifacts/vestige-index/dist/$1"
+      "dest": "/artifacts/vestige-index/dist/index.html"
     }
-  ],
-  "images": {
-    "sizes": [320, 420, 645, 750, 828, 1080, 1200, 1920],
-    "minimumCacheTTL": 60
-  }
+  ]
 }
