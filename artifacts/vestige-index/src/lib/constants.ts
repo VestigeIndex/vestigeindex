@@ -12,7 +12,7 @@ export const COMMENT_FEE_USDT = 0.25;
 
 export const WALLETCONNECT_PROJECT_ID = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || "";
 
-export const ADMIN_USER = "VestigeAdmin";
-export const ADMIN_PASS = "AdminGlobal2025";
+export const ADMIN_USER = import.meta.env.VITE_ADMIN_USER || "VestigeAdmin";
+export const ADMIN_PASS = import.meta.env.VITE_ADMIN_PASS || "";
 
 export const APP_VERSION = "1.0.0";
