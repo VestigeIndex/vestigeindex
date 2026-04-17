@@ -87,6 +87,51 @@ export async function switchToEthereumMainnet(provider: BrowserProvider): Promis
   }
 }
 
+// Switch to Kasplex zkEVM network
+export async function switchToKasplex(provider: BrowserProvider): Promise<void> {
+  try {
+    await provider.send("wallet_switchEthereumChain", [{ chainId: "0x30A03" }]); // 202555 in hex
+  } catch {
+    // If chain not added, try to add it
+    try {
+      await provider.send("wallet_addEthereumChain", [{
+        chainId: "0x30A03",
+        chainName: "Kasplex zkEVM",
+        nativeCurrency: { name: "Kaspa", symbol: "KAS", decimals: 18 },
+        rpcUrls: ["https://evmrpc.kasplex.org"],
+        blockExplorerUrls: ["https://explorer.kasplex.org"],
+      }]);
+    } catch {
+    }
+  }
+}
+
+// Switch to any supported chain
+export async function switchChain(provider: BrowserProvider, chainId: number): Promise<void> {
+  const chainIdHex = "0x" + chainId.toString(16);
+  try {
+    await provider.send("wallet_switchEthereumChain", [{ chainId: chainIdHex }]);
+  } catch {
+    // Chain not found, try to add it
+    const chains: Record<number, any> = {
+      202555: {
+        chainId: "0x30A03",
+        chainName: "Kasplex zkEVM",
+        nativeCurrency: { name: "Kaspa", symbol: "KAS", decimals: 18 },
+        rpcUrls: ["https://evmrpc.kasplex.org"],
+        blockExplorerUrls: ["https://explorer.kasplex.org"],
+      },
+    };
+    
+    if (chains[chainId]) {
+      try {
+        await provider.send("wallet_addEthereumChain", [chains[chainId]]);
+      } catch {
+      }
+    }
+  }
+}
+
 export function getEVMWallet(): EVMWallet | null {
   return (window as any).__evmWallet ?? null;
 }

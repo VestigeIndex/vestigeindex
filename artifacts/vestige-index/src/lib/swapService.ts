@@ -27,7 +27,7 @@ export interface TokenInfo {
 const KNOWN_TOKENS: Record<string, TokenInfo> = {
   ETH:   { address: NATIVE_ETH,    symbol: "ETH",  decimals: 18, name: "Ether",       chainId: 1 },
   USDT:  { address: USDT_MAINNET,  symbol: "USDT", decimals: 6,  name: "Tether USD",  chainId: 1 },
-  USDC:  { address: USDC_MAINNET,  symbol: "USDC", decimals: 6,  name: "USD Coin",    chainId: 1 },
+  USDC:  { address: USDC_MAINNET,   symbol: "USDC", decimals: 6,  name: "USD Coin",    chainId: 1 },
   WBTC:  { address: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", symbol: "WBTC", decimals: 8,  name: "Wrapped BTC",  chainId: 1 },
   BNB:   { address: "0xB8c77482e45F1F44dE1745F52C74426C631bDD52", symbol: "BNB",  decimals: 18, name: "BNB",          chainId: 1 },
   LINK:  { address: "0x514910771AF9Ca656af840dff83E8264EcF986CA", symbol: "LINK", decimals: 18, name: "Chainlink",    chainId: 1 },
@@ -47,6 +47,9 @@ const KNOWN_TOKENS: Record<string, TokenInfo> = {
   BAL:   { address: "0xba100000625a3754423978a60c9317c58a424e3D", symbol: "BAL",  decimals: 18, name: "Balancer",    chainId: 1 },
   GRT:   { address: "0xc944E90C64B2c07662A292be6244BDf05Cda44a7", symbol: "GRT",  decimals: 18, name: "The Graph",  chainId: 1 },
   ENS:   { address: "0xC18360217D8F7Ab5e7c516566761Ea12Ce7F9D72", symbol: "ENS",  decimals: 18, name: "Ethereum Name Service", chainId: 1 },
+  
+  // Kasplex zkEVM tokens
+  KAS:   { address: NATIVE_ETH,    symbol: "KAS",  decimals: 18, name: "Kaspa",       chainId: 202555 },
 };
 
 export function getTokenBySymbol(symbol: string): TokenInfo | null {
