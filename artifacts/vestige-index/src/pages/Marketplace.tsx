@@ -3,9 +3,10 @@ import { useApp } from "../context/AppContext";
 import { t } from "../lib/i18n";
 import { usePrices } from "../hooks/usePrices";
 import { formatCurrency, formatPercent, formatNumber, cn } from "../lib/utils";
-import { Search, TrendingUp, TrendingDown, Loader2 } from "lucide-react";
+import { Search, TrendingUp, TrendingDown, Loader2, X, BarChart3 } from "lucide-react";
 import Sparkline from "../components/Sparkline";
 import SwapModal from "../components/SwapModal";
+import TradingChart from "../components/TradingChart";
 
 interface SwapTarget {
   name: string;
@@ -14,12 +15,18 @@ interface SwapTarget {
   image?: string;
 }
 
+interface ChartData {
+  symbol: string;
+  name: string;
+}
+
 export default function Marketplace() {
   const { lang } = useApp();
   const { coins, loading, error } = usePrices(1, 1000);
   const [search, setSearch] = useState("");
   const [swapTarget, setSwapTarget] = useState<SwapTarget | null>(null);
   const [swapMode, setSwapMode] = useState<"buy" | "sell">("buy");
+  const [chartCoin, setChartCoin] = useState<ChartData | null>(null);
 
   const filtered = coins.filter(
     (c) =>
@@ -30,6 +37,10 @@ export default function Marketplace() {
   function openSwap(coin: SwapTarget, mode: "buy" | "sell") {
     setSwapTarget(coin);
     setSwapMode(mode);
+  }
+
+  function openChart(coin: any) {
+    setChartCoin({ symbol: coin.symbol, name: coin.name });
   }
 
   return (
@@ -128,6 +139,13 @@ export default function Marketplace() {
                     <td className="px-4 py-3">
                       <div className="flex gap-1 justify-end">
                         <button
+                          onClick={() => openChart(coin)}
+                          className="px-2 py-1 bg-blue-600 text-white text-xs rounded font-medium hover:bg-blue-700 transition-colors"
+                          title="Ver gráfico"
+                        >
+                          📊
+                        </button>
+                        <button
                           onClick={() => openSwap(coin, "buy")}
                           className="px-2.5 py-1 bg-emerald-600 text-white text-xs rounded font-medium hover:bg-emerald-700 transition-colors"
                         >
@@ -159,6 +177,28 @@ export default function Marketplace() {
           feeRate={0.003}
           onClose={() => setSwapTarget(null)}
         />
+      )}
+
+      {chartCoin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={() => setChartCoin(null)}>
+          <div className="bg-background rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden m-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">📈</span>
+                <div>
+                  <h2 className="text-lg font-bold">{chartCoin.name}</h2>
+                  <p className="text-xs text-muted-foreground">{chartCoin.symbol}/USDT</p>
+                </div>
+              </div>
+              <button onClick={() => setChartCoin(null)} className="p-2 hover:bg-muted rounded">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-4">
+              <TradingChart symbol={chartCoin.symbol} height={500} />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

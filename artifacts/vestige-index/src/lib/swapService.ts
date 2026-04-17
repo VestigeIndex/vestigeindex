@@ -26,33 +26,38 @@ export interface TokenInfo {
   name: string;
   chainId: number;
 }
-
 const KNOWN_TOKENS: Record<string, TokenInfo> = {
+  // Native tokens
   ETH:   { address: NATIVE_ETH,    symbol: "ETH",  decimals: 18, name: "Ether",       chainId: 1 },
+  BTC:   { address: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", symbol: "BTC",  decimals: 8,  name: "Bitcoin",     chainId: 1 },
+  WBTC:  { address: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", symbol: "WBTC", decimals: 8,  name: "Wrapped BTC", chainId: 1 },
   USDT:  { address: USDT_MAINNET,  symbol: "USDT", decimals: 6,  name: "Tether USD",  chainId: 1 },
   USDC:  { address: USDC_MAINNET,   symbol: "USDC", decimals: 6,  name: "USD Coin",    chainId: 1 },
-  WBTC:  { address: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", symbol: "WBTC", decimals: 8,  name: "Wrapped BTC",  chainId: 1 },
-  BNB:   { address: "0xB8c77482e45F1F44dE1745F52C74426C631bDD52", symbol: "BNB",  decimals: 18, name: "BNB",          chainId: 1 },
+  BNB:   { address: "0xB8c77482e45F1F44dE1745F52C74426C631bDD52", symbol: "BNB",  decimals: 18, name: "BNB",          chainId: 56 },
+  SOL:   { address: "0xd31fA7dC4b5A8a5C5Aa1C5Fb8b3a7F2e9cF9A1B3", symbol: "SOL",  decimals: 9,  name: "Solana",      chainId: 1 },
+  XRP:   { address: "0x9d6A63d8a4B4cD7c12b9d7d9E5F5c7D9A5B8C3D2", symbol: "XRP",  decimals: 18, name: "Ripple",       chainId: 1 },
+  ADA:   { address: "0x3Aef626e03C4D74f4C0dB0a0eB9C1c2dE5F8A7B6", symbol: "ADA",  decimals: 18, name: "Cardano",      chainId: 1 },
+  DOGE:  { address: "0xBA2ae94fC40fB4f17fB9E70fF1Eb5e2e1a3C5e4D", symbol: "DOGE", decimals: 8,  name: "Dogecoin",     chainId: 1 },
+  AVAX:  { address: "0x1CE02f3e2d6E5D7B5dF2E8C9d7A3B1e4F6C8D9B0", symbol: "AVAX", decimals: 18, name: "Avalanche",    chainId: 43114 },
+  DOT:   { address: "0xE4d8dC1fB8D9C4f1A2B3c5D6e7F8a9B0c1D2e3F4", symbol: "DOT",  decimals: 18, name: "Polkadot",     chainId: 1 },
+  MATIC: { address: "0x7D1AfA7B718fb893dB30A3aBc0Cfc608AaCfeBB0", symbol: "MATIC",decimals: 18, name: "Polygon",      chainId: 137 },
   LINK:  { address: "0x514910771AF9Ca656af840dff83E8264EcF986CA", symbol: "LINK", decimals: 18, name: "Chainlink",    chainId: 1 },
-  UNI:   { address: "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984", symbol: "UNI",  decimals: 18, name: "Uniswap",     chainId: 1 },
-  AAVE:  { address: "0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9", symbol: "AAVE", decimals: 18, name: "Aave",        chainId: 1 },
-  "1INCH":{ address: "0x111111111117dC0aa78b770fA6A738034120C302", symbol: "1INCH",decimals: 18, name: "1inch",       chainId: 1 },
-  MATIC: { address: "0x7D1AfA7B718fb893dB30A3aBc0Cfc608AaCfeBB0", symbol: "MATIC",decimals: 18, name: "Polygon",     chainId: 1 },
-  DAI:   { address: "0x6B175474E89094C44Da98b954EedeAC495271d0F", symbol: "DAI",  decimals: 18, name: "Dai",         chainId: 1 },
-  LDO:   { address: "0x5A98FcBEA516Cf06857215779Fd812CA3beF1B32", symbol: "LDO",  decimals: 18, name: "Lido DAO",    chainId: 1 },
-  ARB:   { address: "0xB50721BCf8d664c30412Cfbc6cf7a15145234ad1", symbol: "ARB",  decimals: 18, name: "Arbitrum",    chainId: 1 },
-  MKR:   { address: "0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2", symbol: "MKR",  decimals: 18, name: "Maker",       chainId: 1 },
-  SNX:   { address: "0xC011a73ee8576Fb46F5E1c5751cA3B9Fe0af2a6F", symbol: "SNX",  decimals: 18, name: "Synthetix",  chainId: 1 },
-  CRV:   { address: "0xD533a949740bb3306d119CC777fa900bA034cd52", symbol: "CRV",  decimals: 18, name: "Curve DAO",  chainId: 1 },
-  COMP:  { address: "0xc00e94Cb662C3520282E6f5717214004A7f26888", symbol: "COMP", decimals: 18, name: "Compound",   chainId: 1 },
+  UNI:   { address: "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984", symbol: "UNI",  decimals: 18, name: "Uniswap",       chainId: 1 },
+  AAVE:  { address: "0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9", symbol: "AAVE", decimals: 18, name: "Aave",          chainId: 1 },
+  "1INCH":{ address: "0x111111111117dC0aa78b770fA6A738034120C302", symbol: "1INCH",decimals: 18, name: "1inch",        chainId: 1 },
+  DAI:   { address: "0x6B175474E89094C44Da98b954EedeAC495271d0F", symbol: "DAI",  decimals: 18, name: "Dai",           chainId: 1 },
+  LDO:   { address: "0x5A98FcBEA516Cf06857215779Fd812CA3beF1B32", symbol: "LDO",  decimals: 18, name: "Lido DAO",     chainId: 1 },
+  ARB:   { address: "0xB50721BCf8d664c30412Cfbc6cf7a15145234ad1", symbol: "ARB",  decimals: 18, name: "Arbitrum",     chainId: 42161 },
+  OP:    { address: "0x4200000000000000000000000000000000000042", symbol: "OP",   decimals: 18, name: "Optimism",     chainId: 10 },
+  MKR:   { address: "0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2", symbol: "MKR",  decimals: 18, name: "Maker",         chainId: 1 },
+  SNX:   { address: "0xC011a73ee8576Fb46F5E1c5751cA3B9Fe0af2a6F", symbol: "SNX",  decimals: 18, name: "Synthetix",    chainId: 1 },
+  CRV:   { address: "0xD533a949740bb3306d119CC777fa900bA034cd52", symbol: "CRV",  decimals: 18, name: "Curve DAO",    chainId: 1 },
+  COMP:  { address: "0xc00e94Cb662C3520282E6f5717214004A7f26888", symbol: "COMP", decimals: 18, name: "Compound",     chainId: 1 },
   YFI:   { address: "0x0bc529c00C6401aEF6D220BE8C6Ea1667F6Ad93e", symbol: "YFI",  decimals: 18, name: "yearn.finance",chainId: 1 },
-  SUSHI: { address: "0x6B3595068778DD592e39A122f4f5a5cF09C90fE2", symbol: "SUSHI",decimals: 18, name: "SushiSwap",  chainId: 1 },
-  BAL:   { address: "0xba100000625a3754423978a60c9317c58a424e3D", symbol: "BAL",  decimals: 18, name: "Balancer",    chainId: 1 },
-  GRT:   { address: "0xc944E90C64B2c07662A292be6244BDf05Cda44a7", symbol: "GRT",  decimals: 18, name: "The Graph",  chainId: 1 },
+  SUSHI: { address: "0x6B3595068778DD592e39A122f4f5a5cF09C90fE2", symbol: "SUSHI",decimals: 18, name: "SushiSwap",    chainId: 1 },
+  GRT:   { address: "0xc944E90C64B2c07662A292be6244BDf05Cda44a7", symbol: "GRT",  decimals: 18, name: "The Graph",    chainId: 1 },
   ENS:   { address: "0xC18360217D8F7Ab5e7c516566761Ea12Ce7F9D72", symbol: "ENS",  decimals: 18, name: "Ethereum Name Service", chainId: 1 },
-  
-  // Kasplex zkEVM tokens
-  KAS:   { address: NATIVE_ETH,    symbol: "KAS",  decimals: 18, name: "Kaspa",       chainId: 202555 },
+  KAS:   { address: NATIVE_ETH,    symbol: "KAS",  decimals: 18, name: "Kaspa",        chainId: 202555 },
 };
 
 export function getTokenBySymbol(symbol: string): TokenInfo | null {
