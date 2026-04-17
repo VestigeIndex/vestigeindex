@@ -1,6 +1,14 @@
 const CMC_API_KEY = import.meta.env.VITE_COINMARKETCAP_API_KEY || "";
 const CMC_BASE = "https://pro-api.coinmarketcap.com/v1";
 
+// Fallback API bases (no key needed)
+const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
+const COINGECKO_API_FREE = "https://api.coingecko.com/api/v3";
+const BYNANCE_API = "https://api.binance.com/api/v3";
+const BYNANCE_API_FREE = "https://api.binance.com/api/v3";
+const KUCoin_API = "https://api.kucoin.com/api/v1";
+const OKX_API = "https://www.okx.com/api/v5/market";
+
 export interface CMCToken {
   id: number;
   name: string;
@@ -144,7 +152,8 @@ export async function getBinanceTicker(symbol: string): Promise<BinanceTicker | 
 // CoinGecko fallback - NO API KEY NEEDED (limited but works)
 async function getTop1000FromCoinGecko(): Promise<CMCToken[]> {
   try {
-    const url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1";
+    // Get top 250 from page 1
+    const url = `${COINGECKO_BASE}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&sparkline=false&price_change_percentage=1h,24h,7d,30d`;
     const response = await fetch(url);
     if (!response.ok) {
       console.error("CoinGecko API error:", response.status);
@@ -183,8 +192,116 @@ async function getTop1000FromCoinGecko(): Promise<CMCToken[]> {
   }
 }
 
+// Fallback Binance prices from multiple sources
+async function getBinancePricesFallback(symbols: string[]): Promise<Map<string, BinanceTicker>> {
+  const result = new Map<string, BinanceTicker>();
+  
+  // Try Binance first
+  try {
+    const response = await fetch(`${BYNANCE_API}/ticker/24hr`);
+    if (response.ok) {
+      const allTickers: BinanceTicker[] = await response.json();
+      for (const symbol of symbols) {
+        const binanceSymbol = `${symbol.toUpperCase()}USDT`;
+        const ticker = allTickers.find((t) => t.symbol === binanceSymbol);
+        if (ticker) result.set(symbol.toUpperCase(), ticker);
+      }
+      if (result.size > 0) {
+        console.log("Using Binance prices");
+        return result;
+      }
+    }
+  } catch (e) { console.error("Binance failed:", e); }
+  
+  // Fallback to KuCoin
+  try {
+    for (const symbol of symbols) {
+      const resp = await fetch(`${KUCoin_API}/market/candles?symbol=${symbol}-USDT&type=1min&size=1`);
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.data && data.data.length > 0) {
+          const candle = data.data[0];
+          result.set(symbol.toUpperCase(), {
+            symbol: `${symbol.toUpperCase()}USDT`,
+            priceChange: "0",
+            priceChangePercent: "0",
+            weightedAvgPrice: candle[2],
+            prevClosePrice: candle[1],
+            lastPrice: candle[2],
+            lastQty: "0",
+            bidPrice: "0",
+            bidQty: "0",
+            askPrice: "0",
+            askQty: "0",
+            openPrice: candle[1],
+            highPrice: candle[3],
+            lowPrice: candle[4],
+            volume: candle[5],
+            quoteVolume: "0",
+            count: 0,
+          });
+        }
+      }
+    }
+    if (result.size > 0) console.log("Using KuCoin fallback prices");
+  } catch (e) { console.error("KuCoin failed:", e); }
+  
+  // Fallback to CoinGecko prices
+  if (result.size === 0) {
+    try {
+      const ids = symbols.map(s => {
+        const map: Record<string, string> = {
+          BTC: "bitcoin", ETH: "ethereum", BNB: "binancecoin", SOL: "solana",
+          XRP: "ripple", ADA: "cardano", DOGE: "dogecoin", MATIC: "matic-network",
+          DOT: "polkadot", AVAX: "avalanche-2", TRX: "tron", LTC: "litecoin",
+        };
+        return map[s.toUpperCase()] || s.toLowerCase();
+      }).join(",");
+      
+      const resp = await fetch(`${COINGECKO_BASE}/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`);
+      if (resp.ok) {
+        const data = await resp.json();
+        for (const symbol of symbols) {
+          const map: Record<string, string> = {
+            BTC: "bitcoin", ETH: "ethereum", BNB: "binancecoin", SOL: "solana",
+            XRP: "ripple", ADA: "cardano", DOGE: "dogecoin", MATIC: "matic-network",
+            DOT: "polkadot", AVAX: "avalanche-2", TRX: "tron", LTC: "litecoin",
+          };
+          const id = map[symbol.toUpperCase()];
+          if (id && data[id]) {
+            result.set(symbol.toUpperCase(), {
+              symbol: `${symbol.toUpperCase()}USDT`,
+              priceChange: "0",
+              priceChangePercent: String(data[id].usd_24h_change || 0),
+              weightedAvgPrice: String(data[id].usd || 0),
+              prevClosePrice: String(data[id].usd || 0),
+              lastPrice: String(data[id].usd || 0),
+              lastQty: "0",
+              bidPrice: "0",
+              bidQty: "0",
+              askPrice: "0",
+              askQty: "0",
+              openPrice: String(data[id].usd || 0),
+              highPrice: String(data[id].usd || 0),
+              lowPrice: String(data[id].usd || 0),
+              volume: "0",
+              quoteVolume: "0",
+              count: 0,
+            });
+          }
+        }
+        console.log("Using CoinGecko fallback prices");
+      }
+    } catch (e) { console.error("CoinGecko price fallback failed:", e); }
+  }
+  
+  return result;
+}
+
 // Enrich CMC data with Binance prices for faster updates
 export async function getEnrichedMarketData(): Promise<EnrichedToken[]> {
+  console.log("Fetching market data...");
+  
   let cmcTokens = await getTop1000FromCMC();
 
   // Fallback to CoinGecko if CMC fails
@@ -194,12 +311,15 @@ export async function getEnrichedMarketData(): Promise<EnrichedToken[]> {
   }
 
   if (cmcTokens.length === 0) {
+    console.log("All APIs failed, returning empty");
     return [];
   }
 
+  console.log(`Got ${cmcTokens.length} tokens from API`);
+
   // Get Binance prices for top symbols for faster updates
   const topSymbols = ["BTC", "ETH", "BNB", "SOL", "XRP", "ADA", "DOGE", "MATIC", "DOT", "AVAX"];
-  const binancePrices = await getBinancePrices(topSymbols);
+  const binancePrices = await getBinancePricesFallback(topSymbols);
 
   // Map CMC data to our format
   const enriched: EnrichedToken[] = cmcTokens.map((token) => {
