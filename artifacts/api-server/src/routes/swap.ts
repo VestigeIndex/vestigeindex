@@ -2,7 +2,7 @@ import { Router } from "express";
 
 const router = Router();
 
-const ONEINCH_KEY = "cFZRlj7mPjGzwxl0QP3B1j3qvzB6cHrN";
+const ONEINCH_KEY = process.env.ONEINCH_API_KEY;
 const EVM_FEE_ADDRESS = "0xa1131edb7a6d5e816bf8548078a88a6bf3d91c7f";
 const BASE_URL = "https://api.1inch.dev/swap/v6.0";
 
