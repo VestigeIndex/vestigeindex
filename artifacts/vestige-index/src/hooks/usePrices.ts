@@ -143,30 +143,47 @@ export function useIndexPrices() {
 
   const fetchIndexPrices = useCallback(async () => {
     try {
-      const ids = "defipulse-index,metaverse-index,data-economy-index,pax-gold,tether-gold,chainlink,1inch";
+      // All indices from config - use CoinGecko IDs
+      const ids = [
+        "defipulse-index",         // DPI
+        "metaverse-index",        // MVI
+        "index-coop-large-cap-index", // IC21
+        "pax-gold",              // PAXG
+        "tether-gold",           // XAUt
+        "backed-cspx",           // bCSPX
+        "backed-ibta",           // bIBTA
+        "data-economy-index",     // DATA
+        "synthetix-defi-index",  // sDEFI
+        "synthetix-cex-index",   // sCEX
+      ].join(",");
+      
       const url = `${COINGECKO_BASE}/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`;
       const resp = await fetch(url);
       if (!resp.ok) return;
       const data = await resp.json();
 
+      // Map CoinGecko IDs to symbols
       const mapping: Record<string, string> = {
-        DPI: "defipulse-index",
-        MVI: "metaverse-index",
-        DATA: "data-economy-index",
-        PAXG: "pax-gold",
-        XAUt: "tether-gold",
-        LINK: "chainlink",
-        "1INCH": "1inch",
+        "defipulse-index": "DPI",
+        "metaverse-index": "MVI",
+        "index-coop-large-cap-index": "IC21",
+        "pax-gold": "PAXG",
+        "tether-gold": "XAUt",
+        "backed-cspx": "bCSPX",
+        "backed-ibta": "bIBTA",
+        "data-economy-index": "DATA",
+        "synthetix-defi-index": "sDEFI",
+        "synthetix-cex-index": "sCEX",
       };
 
       const result: Record<string, { price: number; change: number }> = {};
-      for (const [sym, id] of Object.entries(mapping)) {
+      for (const [id, symbol] of Object.entries(mapping)) {
         const d = data[id] || {};
-        result[sym] = { price: d.usd ?? 0, change: d.usd_24h_change ?? 0 };
+        result[symbol] = { price: d.usd ?? 0, change: d.usd_24h_change ?? 0 };
       }
-      result["OIL"] = { price: 82.45, change: -0.34 };
       setPrices(result);
     } catch {
+      console.error("Failed to fetch index prices:", err);
     }
   }, []);
 
