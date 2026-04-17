@@ -5,6 +5,39 @@
 const BINANCE_API = "https://api.binance.com/api/v3";
 const COINGECKO_API = "https://api.coingecko.com/api/v3";
 
+// LocalStorage keys for persistent caching
+const CACHE_KEYS = {
+  BINANCE: "vestige_binance_cache",
+  COINGECKO: "vestige_coingecko_cache",
+  MARKET: "vestige_market_data",
+};
+
+const CACHE_DURATION = {
+  BINANCE: 60 * 1000, // 1 minute
+  COINGECKO: 30 * 60 * 1000, // 30 minutes
+  MARKET: 60 * 1000, // 1 minute
+};
+
+// Helper functions for localStorage cache
+function getCache<T>(key: string, maxAge: number): T | null {
+  try {
+    const cached = localStorage.getItem(key);
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp < maxAge) {
+        return data;
+      }
+    }
+  } catch {}
+  return null;
+}
+
+function setCache<T>(key: string, data: T): void {
+  try {
+    localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
+  } catch {}
+}
+
 // Common token icons mapping
 const TOKEN_ICONS: Record<string, string> = {
   BTC: "https://assets.coingecko.com/coins/images/1/small/bitcoin.png",

@@ -60,66 +60,130 @@ export function getTokenBySymbol(symbol: string): TokenInfo | null {
   return KNOWN_TOKENS[upper] ?? null;
 }
 
-export async function getQuote(
-  srcTokenAddress: string,
-  dstTokenAddress: string,
-  amountWei: string,
-  chainId = 1,
-  sender: string = "0x0000000000000000000000000000000000000000"
-): Promise<SwapQuote> {
-  // FALLBACK 1: Swap API
-  try {
-    const url = `${SWAP_API}/swap/${chainId}?tokenIn=${srcTokenAddress}&tokenOut=${dstTokenAddress}&amount=${amountWei}&sender=${sender}`;
-    const resp = await fetch(url);
-    
-    if (resp.ok) {
-      const data = await resp.json();
-      if (data.success && data.data) {
-        return {
-          dstAmount: data.data?.tx?.dstAmount || "0",
-          dstAmountFormatted: data.data?.dstAmountFormatted || "0",
-          gas: data.data?.gas || 0,
-          protocols: data.data?.protocols,
-          toToken: data.data?.toToken,
-          fromToken: data.data?.fromToken,
-        };
-      }
-    }
-  } catch (e) {
-    console.log("Swap API failed, trying LI.FI...");
-  }
+// 3-Level Swap Fallback System
+// Level 1: OpenOcean (primary)
+// Level 2: LI.FI (cross-chain)
+// Level 3: Uniswap V3 (direct)
 
-  // FALLBACK 2: LI.FI
-  try {
-    const lifiUrl = `https://li.quest/v1/quote?fromChain=${getChainName(chainId)}&fromToken=${srcTokenAddress}&fromAmount=${amountWei}&toChain=${getChainName(chainId)}&toToken=${dstTokenAddress}&fromAddress=${sender}`;
-    const lifiResp = await fetch(lifiUrl);
-    
-    if (lifiResp.ok) {
-      const lifiData = await lifiResp.json();
-      if (lifiData.quote) {
-        return {
-          dstAmount: lifiData.quote.toTokenAmount || "0",
-          dstAmountFormatted: lifiData.quote.toTokenAmount || "0",
-          gas: lifiData.quote.estimate?.gasCosts?.[0]?.amount || 0,
-          protocols: lifiData.quote.toolDetails || [],
-          toToken: { symbol: dstTokenAddress, decimals: 18 },
-          fromToken: { symbol: srcTokenAddress, decimals: 18 },
-        };
-      }
-    }
-  } catch (e) {
-    console.log("LI.FI failed, trying direct Uniswap...");
-  }
+const OPENOCEAN_API = "https://open-api.openocean.io/v2";
+const LIFI_API = "https://li.quest/v1";
+const UNISWAP_QUOTER = "https://api.uniswap.org/v1";
+const UNISWAP_V3_ROUTER = "0xE592427A0AEce92De3Edee1F18E0157C05861564";
 
-  // FALLBACK 3: Direct Uniswap V3 (for Ethereum mainnet only)
-  if (chainId === 1) {
-    return getUniswapQuote(srcTokenAddress, dstTokenAddress, amountWei);
-  }
-
-  throw new Error("All swap providers failed");
+export interface SwapResult {
+  to: string;
+  data: string;
+  value: string;
+  gas?: number;
 }
 
-// Helper to get chain name for LI.FI
+interface SwapError {
+  provider: string;
+  message: string;
+}
+
+export async function getMultiChainQuote(
+  srcToken: string,
+  dstToken: string,
+  amountWei: string,
+  fromAddress: string,
+  chainId: number = 1
+): Promise<{ quote: SwapResult; provider: string }> {
+  const errors: SwapError[] = [];
+
+  // LEVEL 1: OpenOcean
+  try {
+    const ooUrl = `${OPENOCEAN_API}/swap/${chainId}/quote?inTokenAddress=${srcToken}&outTokenAddress=${dstToken}&amount=${amountWei}&slippage=1&account=${fromAddress}`;
+    const ooRes = await fetch(ooUrl, {
+      headers: { "Content-Type": "application/json" },
+    });
+    
+    if (ooRes.ok) {
+      const ooData = await ooRes.json();
+      if (ooData.data?.tx) {
+        return {
+          quote: {
+            to: ooData.data.tx.to,
+            data: ooData.data.tx.data,
+            value: ooData.data.tx.value || "0",
+            gas: ooData.data.estimate?.gas || 200000,
+          },
+          provider: "OpenOcean",
+        };
+      }
+    }
+  } catch (e: any) {
+    errors.push({ provider: "OpenOcean", message: e.message });
+    console.log("OpenOcean failed, trying LI.FI...");
+  }
+
+  // LEVEL 2: LI.FI
+  try {
+    const chainName = getChainName(chainId);
+    const lifiUrl = `${LIFI_API}/quote?fromChain=${chainName}&fromToken=${srcToken}&fromAmount=${amountWei}&toChain=${chainName}&toToken=${dstToken}&fromAddress=${fromAddress}`;
+    const lifiRes = await fetch(lifiUrl);
+    
+    if (lifiRes.ok) {
+      const lifiData = await lifiRes.json();
+      if (lifiData.transactionRequest) {
+        return {
+          quote: {
+            to: lifiData.transactionRequest.to,
+            data: lifiData.transactionRequest.data,
+            value: lifiData.transactionRequest.value || "0",
+            gas: lifiData.estimate?.gasCosts?.[0]?.amount || 200000,
+          },
+          provider: "LI.FI",
+        };
+      }
+    }
+  } catch (e: any) {
+    errors.push({ provider: "LI.FI", message: e.message });
+    console.log("LI.FI failed, trying Uniswap V3...");
+  }
+
+  // LEVEL 3: Uniswap V3 Direct
+  if (chainId === 1) {
+    try {
+      const uniData = await getUniswapV3Quote(srcToken, dstToken, amountWei, fromAddress);
+      if (uniData) {
+        return {
+          quote: {
+            to: UNISWAP_V3_ROUTER,
+            data: uniData.methodParameters?.calldata || "",
+            value: uniData.methodParameters?.value || "0",
+            gas: 150000,
+          },
+          provider: "Uniswap V3",
+        };
+      }
+    } catch (e: any) {
+      errors.push({ provider: "Uniswap V3", message: e.message });
+    }
+  }
+
+  throw new Error(`All swap providers failed: ${errors.map(e => `${e.provider}: ${e.message}`).join(", ")}`);
+}
+
+// Get Uniswap V3 quote via API
+async function getUniswapV3Quote(
+  srcToken: string,
+  dstToken: string,
+  amount: string,
+  userAddress: string
+): Promise<any> {
+  try {
+    const url = `${UNISWAP_QUOTER}/quote?tokenIn=${srcToken}&tokenOut=${dstToken}&amount=${amount}&chainId=1&type=exactIn`;
+    const res = await fetch(url);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (e) {
+    console.error("Uniswap API error:", e);
+  }
+  return null;
+}
+
 function getChainName(chainId: number): string {
   const chains: Record<number, string> = {
     1: "ethereum",
@@ -133,27 +197,35 @@ function getChainName(chainId: number): string {
   return chains[chainId] || "ethereum";
 }
 
-// Uniswap V3 fallback for direct quotes
-async function getUniswapQuote(
+// Legacy function - uses the multi-chain system
+export async function getQuote(
   srcTokenAddress: string,
   dstTokenAddress: string,
-  amountWei: string
+  amountWei: string,
+  chainId = 1,
+  sender: string = "0x0000000000000000000000000000000000000000"
 ): Promise<SwapQuote> {
-  // For demo purposes, return a mock quote based on pool data
-  // In production, you'd query Uniswap V3 subgraph or use multicall
-  const inputAmount = parseFloat(formatUnits(amountWei, 18));
-  
-  // Mock 0.3% price impact
-  const outputAmount = inputAmount * 0.997;
-  
-  return {
-    dstAmount: parseUnits(outputAmount.toString(), 18).toString(),
-    dstAmountFormatted: outputAmount.toFixed(6),
-    gas: 150000,
-    protocols: [{ name: "Uniswap V3", type: "v3" }],
-    toToken: { symbol: "UNKNOWN", decimals: 18 },
-    fromToken: { symbol: "UNKNOWN", decimals: 18 },
-  };
+  try {
+    const result = await getMultiChainQuote(
+      srcTokenAddress,
+      dstTokenAddress,
+      amountWei,
+      sender,
+      chainId
+    );
+
+    return {
+      dstAmount: "0",
+      dstAmountFormatted: "0",
+      gas: result.quote.gas || 150000,
+      protocols: [{ name: result.provider, type: "aggregator" }],
+      toToken: { symbol: "UNKNOWN", decimals: 18 },
+      fromToken: { symbol: "UNKNOWN", decimals: 18 },
+    };
+  } catch (error: any) {
+    console.error("All swaps failed:", error.message);
+    throw new Error(error.message || "No swap available");
+  }
 }
 
 export async function buildSwapTx(
