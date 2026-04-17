@@ -1,4 +1,4 @@
-const CMC_API_KEY = import.meta.env.VITE_COINMARKETCAP_API_KEY || "c8319a304a904f709aeb6629ea0c6423";
+const CMC_API_KEY = import.meta.env.VITE_COINMARKETCAP_API_KEY || "";
 const CMC_BASE = "https://pro-api.coinmarketcap.com/v1";
 
 export interface CMCToken {
