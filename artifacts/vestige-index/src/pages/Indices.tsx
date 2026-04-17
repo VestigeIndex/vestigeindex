@@ -50,7 +50,7 @@ function IndexCard({
     <div className="bg-card border border-border rounded-lg overflow-hidden hover:border-border transition-colors">
       <div className="p-4">
         <div className="flex items-start justify-between gap-2 mb-2">
-          <div>
+          <button onClick={onChart} className="text-left hover:opacity-80 transition-opacity">
             <div className="flex items-center gap-2">
               <span className="font-bold text-sm">{index.symbol}</span>
               <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${colors.bg} ${colors.text}`}>
@@ -58,7 +58,7 @@ function IndexCard({
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{index.name}</p>
-          </div>
+          </button>
           <div className="text-right">
             <p className="font-mono font-semibold text-sm">
               {price > 0 ? formatCurrency(price) : "—"}
@@ -111,12 +111,6 @@ function IndexCard({
         </div>
 
         <div className="flex gap-1.5 mt-auto">
-          <button
-            onClick={onChart}
-            className="flex-1 py-1.5 bg-blue-600 text-white text-xs rounded font-medium hover:bg-blue-700 transition-colors"
-          >
-            📊 Gráfico
-          </button>
           <button
             onClick={onBuy}
             className="flex-1 py-1.5 bg-emerald-600 text-white text-xs rounded font-medium hover:bg-emerald-700 transition-colors"

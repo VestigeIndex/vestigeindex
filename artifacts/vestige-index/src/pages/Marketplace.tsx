@@ -103,13 +103,16 @@ export default function Marketplace() {
                   <tr key={coin.id} className="table-row-hover border-b border-border/40">
                     <td className="px-4 py-3 text-muted-foreground text-xs">{coin.market_cap_rank}</td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2.5">
+                      <button 
+                        onClick={() => openChart(coin)}
+                        className="flex items-center gap-2.5 hover:opacity-80 transition-opacity w-full text-left"
+                      >
                         <img src={coin.image} alt={coin.name} className="w-6 h-6 rounded-full shrink-0" />
                         <div>
                           <div className="font-medium text-xs leading-none">{coin.name}</div>
                           <div className="text-xs text-muted-foreground uppercase mt-0.5">{coin.symbol}</div>
                         </div>
-                      </div>
+                      </button>
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-xs">
                       {coin.current_price < 0.01
@@ -138,13 +141,6 @@ export default function Marketplace() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1 justify-end">
-                        <button
-                          onClick={() => openChart(coin)}
-                          className="px-2 py-1 bg-blue-600 text-white text-xs rounded font-medium hover:bg-blue-700 transition-colors"
-                          title="Ver gráfico"
-                        >
-                          📊
-                        </button>
                         <button
                           onClick={() => openSwap(coin, "buy")}
                           className="px-2.5 py-1 bg-emerald-600 text-white text-xs rounded font-medium hover:bg-emerald-700 transition-colors"
