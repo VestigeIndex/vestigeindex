@@ -141,10 +141,58 @@ export async function getBinanceTicker(symbol: string): Promise<BinanceTicker | 
   }
 }
 
+// CoinGecko fallback - NO API KEY NEEDED (limited but works)
+async function getTop1000FromCoinGecko(): Promise<CMCToken[]> {
+  try {
+    const url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1";
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error("CoinGecko API error:", response.status);
+      return [];
+    }
+    const data = await response.json();
+    
+    // Convert CoinGecko format to CMC format
+    return data.map((coin: any) => ({
+      id: coin.market_cap_rank || 0,
+      name: coin.name,
+      symbol: coin.symbol.toUpperCase(),
+      slug: coin.id,
+      cmc_rank: coin.market_cap_rank || 0,
+      quote: {
+        USD: {
+          price: coin.current_price || 0,
+          volume_24h: coin.total_volume || 0,
+          volume_change_24h: 0,
+          percent_change_1h: coin.price_change_percentage_1h_in_currency || 0,
+          percent_change_24h: coin.price_change_percentage_24h || 0,
+          percent_change_7d: coin.price_change_percentage_7d_in_currency || 0,
+          percent_change_30d: coin.price_change_percentage_30d_in_currency || 0,
+          market_cap: coin.market_cap || 0,
+          market_cap_dominance: 0,
+          fully_diluted_market_cap: coin.fully_diluted_valuation || 0,
+          circulating_supply: coin.circulating_supply || 0,
+          total_supply: coin.total_supply || 0,
+          max_supply: coin.max_supply || 0,
+        }
+      }
+    }));
+  } catch (error) {
+    console.error("Failed to fetch from CoinGecko:", error);
+    return [];
+  }
+}
+
 // Enrich CMC data with Binance prices for faster updates
 export async function getEnrichedMarketData(): Promise<EnrichedToken[]> {
-  const cmcTokens = await getTop1000FromCMC();
-  
+  let cmcTokens = await getTop1000FromCMC();
+
+  // Fallback to CoinGecko if CMC fails
+  if (cmcTokens.length === 0) {
+    console.log("CMC failed, falling back to CoinGecko...");
+    cmcTokens = await getTop1000FromCoinGecko();
+  }
+
   if (cmcTokens.length === 0) {
     return [];
   }
