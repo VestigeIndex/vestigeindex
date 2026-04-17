@@ -16,6 +16,41 @@ interface TradingChartProps {
   darkMode?: boolean;
 }
 
+
+// Mapeo de símbolos de CoinGecko a Binance
+const SYMBOL_MAP: Record<string, string> = {
+  'BTC': 'BTCUSDT', 'ETH': 'ETHUSDT', 'BNB': 'BNBUSDT', 'SOL': 'SOLUSDT',
+  'XRP': 'XRPUSDT', 'ADA': 'ADAUSDT', 'DOGE': 'DOGEUSDT', 'DOT': 'DOTUSDT',
+  'MATIC': 'MATICUSDT', 'LINK': 'LINKUSDT', 'UNI': 'UNIUSDT', 'AVAX': 'AVAXUSDT',
+  'ATOM': 'ATOMUSDT', 'LTC': 'LTCUSDT', 'ETC': 'ETCUSDT', 'XLM': 'XLMUSDT',
+  'ALGO': 'ALGOUSDT', 'VET': 'VETUSDT', 'FIL': 'FILUSDT', 'THETA': 'THETAUSDT',
+  'AXS': 'AXSUSDT', 'MANA': 'MANAUSDT', 'SAND': 'SANDUSDT', 'GALA': 'GALAUSDT',
+  'AAVE': 'AAVEUSDT', 'SNX': 'SNXUSDT', 'CRV': 'CRVUSDT', 'COMP': 'COMPUSDT',
+  'MKR': 'MKRUSDT', 'SUSHI': 'SUSHIUSDT', 'YFI': 'YFIUSDT', 'BAL': 'BALUSDT',
+  'GRT': 'GRTUSDT', 'ENS': 'ENSUSDT', '1INCH': '1INCHUSDT', 'ARB': 'ARBUSDT',
+  'OP': 'OPUSDT', 'SHIB': 'SHIBUSDT', 'PEPE': 'PEPEUSDT', 'LDO': 'LDOUSDT',
+  'APT': 'APTUSDT', 'NEAR': 'NEARUSDT', 'INJ': 'INJUSDT', 'TIA': 'TIAUSDT',
+  'SEI': 'SEIUSDT', 'SUI': 'SUIUSDT', 'FTM': 'FTMUSDT', 'HBAR': 'HBARUSDT',
+  'XMR': 'XMRUSDT', 'ZEC': 'ZECUSDT', 'DASH': 'DASHUSDT', 'NEO': 'NEOUSDT',
+  'KAVA': 'KAVAUSDT', 'CAKE': 'CAKEUSDT', 'RUNE': 'RUNEUSDT', 'KSM': 'KSMUSDT',
+  'CRO': 'CROUSDT', 'QNT': 'QNTUSDT', 'EGLD': 'EGLDUSDT', 'MINA': 'MINAUSDT',
+  'IMX': 'IMXUSDT', 'STX': 'STXUSDT', 'BONK': 'BONKUSDT', 'WIF': 'WIFUSDT',
+  'JUP': 'JUPUSDT', 'BTT': 'BTTUSDT', 'TRX': 'TRXUSDT', 'TON': 'TONUSDT',
+  'XTZ': 'XTZUSDT', 'IOTA': 'IOTAUSDT', 'NEXO': 'NEXOUSDT', 'STELLAR': 'XLMUSDT',
+  'USDT': 'USDCUSDT', 'USDC': 'USDCUSDT', 'DAI': 'DAIUSDT', 'BUSD': 'BUSDUSDT',
+  'TUSD': 'TUSDUSDT',
+};
+
+const KNOWN_BINANCE_SYMBOLS = new Set(Object.values(SYMBOL_MAP));
+
+function getBinanceSymbol(symbol: string): string | null {
+  const upper = symbol.toUpperCase();
+  if (SYMBOL_MAP[upper]) return SYMBOL_MAP[upper];
+  const direct = `${upper}USDT`;
+  return KNOWN_BINANCE_SYMBOLS.has(direct) ? direct : null;
+}
+
+
 const TIME_RANGES = [
   { label: "1D", days: 1, interval: "15m" },
   { label: "1S", days: 7, interval: "1h" },
