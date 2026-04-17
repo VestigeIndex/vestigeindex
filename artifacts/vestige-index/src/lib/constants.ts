@@ -5,6 +5,7 @@ export const BTC_FEE_ADDRESS = "bc1qlv9cvcfm4m09uzw725e82xuudv6q3zpxqw9x7n";
 
 export const CRYPTOCOMPARE_API_KEY = import.meta.env.VITE_CRYPTOCOMPARE_API_KEY || "";
 export const ONEINCH_API_KEY = import.meta.env.VITE_ONEINCH_API_KEY || "";
+export const COINMARKETCAP_API_KEY = import.meta.env.VITE_COINMARKETCAP_API_KEY || "";
 
 export const TOP100_FEE = 0.003;
 export const INDEX_FEE = 0.005;
