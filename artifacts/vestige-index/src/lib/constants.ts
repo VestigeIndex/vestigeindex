@@ -7,8 +7,12 @@ export const CRYPTOCOMPARE_API_KEY = import.meta.env.VITE_CRYPTOCOMPARE_API_KEY 
 export const ONEINCH_API_KEY = import.meta.env.VITE_ONEINCH_API_KEY || "";
 export const COINMARKETCAP_API_KEY = import.meta.env.VITE_COINMARKETCAP_API_KEY || "";
 
-export const TOP100_FEE = 0.003;
+// Top 1000 fee (0.3%)
+export const TOP1000_FEE = 0.003;
+// Indices fee (0.5%)
 export const INDEX_FEE = 0.005;
+// Backward compatibility - deprecated, use TOP1000_FEE
+export const TOP100_FEE = TOP1000_FEE;
 export const COMMENT_FEE_USDT = 0.25;
 
 export const WALLETCONNECT_PROJECT_ID = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || "";
