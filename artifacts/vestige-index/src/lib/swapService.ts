@@ -1,8 +1,15 @@
 import { BrowserProvider, JsonRpcSigner, parseUnits, formatUnits } from "ethers";
 import { EVM_FEE_ADDRESS, TOP100_FEE, INDEX_FEE } from "./constants";
 
+// API Configuration
 const SWAP_API = "https://api.swapapi.dev/v1";
-const OPENOCEAN_API = "https://open-api.openocean.finance/v2"; // Updated to correct endpoint
+const OPENOCEAN_API = "https://open-api.openocean.finance/v2";
+const UNISWAP_GATEWAY = "https://trade-api.gateway.uniswap.org/v1";
+const ONEINCH_API = "https://api.1inch.dev/swap/v5.2";
+
+// Get API keys from environment - these should be set in Vercel Dashboard
+const UNISWAP_API_KEY = "4Ms8qZqQCQSu8CE3Uxhe4jHmwVuogtXWRObOGzm9mqQ";
+const ONEINCH_API_KEY = "WjU528TRkf4g5jlQLegjJcgLB4HIVg16";
 
 export const NATIVE_ETH = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 export const USDT_MAINNET = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
@@ -156,33 +163,91 @@ export async function getMultiChainQuote(
     }
   } catch (e: any) {
     errors.push({ provider: "LI.FI", message: e.message });
-    console.log("LI.FI failed, trying Uniswap V3...");
+    console.log("LI.FI failed, trying 1inch...");
   }
 
-  // LEVEL 3: Uniswap V3 Direct
+  // LEVEL 3: 1inch
   if (chainId === 1) {
     try {
-      const uniData = await getUniswapV3Quote(srcToken, dstToken, amountWei, fromAddress);
+      const inchData = await get1inchQuote(srcToken, dstToken, amountWei);
+      if (inchData) {
+        return {
+          quote: {
+            to: inchData.tx?.to || "",
+            data: inchData.tx?.data || "",
+            value: inchData.tx?.value || "0",
+            gas: 200000,
+          },
+          provider: "1inch",
+        };
+      }
+    } catch (e: any) {
+      errors.push({ provider: "1inch", message: e.message });
+    }
+  }
+
+  // LEVEL 4: Uniswap V3 via Gateway API
+  if (chainId === 1) {
+    try {
+      const uniData = await getUniswapGatewayQuote(srcToken, dstToken, amountWei, fromAddress);
       if (uniData) {
         return {
           quote: {
-            to: UNISWAP_V3_ROUTER,
+            to: uniData.txRouter,
             data: uniData.methodParameters?.calldata || "",
             value: uniData.methodParameters?.value || "0",
             gas: 150000,
           },
-          provider: "Uniswap V3",
+          provider: "Uniswap",
         };
       }
     } catch (e: any) {
-      errors.push({ provider: "Uniswap V3", message: e.message });
+      errors.push({ provider: "Uniswap", message: e.message });
     }
   }
 
   throw new Error(`All swap providers failed: ${errors.map(e => `${e.provider}: ${e.message}`).join(", ")}`);
 }
 
-// Get Uniswap V3 quote via API
+// Get Uniswap quote via Gateway API (with API key)
+async function getUniswapGatewayQuote(
+  srcToken: string,
+  dstToken: string,
+  amount: string,
+  userAddress: string
+): Promise<any> {
+  try {
+    const response = await fetch(`${UNISWAP_GATEWAY}/quote`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": UNISWAP_API_KEY,
+        "x-universal-router-version": "2.0",
+      },
+      body: JSON.stringify({
+        type: "EXACT_INPUT",
+        amount: amount,
+        tokenIn: srcToken,
+        tokenOut: dstToken,
+        tokenInChainId: 1,
+        tokenOutChainId: 1,
+        swapper: userAddress,
+        routingPreference: "BEST_PRICE",
+        urgency: "urgent",
+      }),
+    });
+
+    if (response.ok) {
+      return await response.json();
+    }
+    console.log("Uniswap Gateway error:", response.status);
+  } catch (e) {
+    console.error("Uniswap Gateway error:", e);
+  }
+  return null;
+}
+
+// Get Uniswap V3 quote via API (legacy)
 async function getUniswapV3Quote(
   srcToken: string,
   dstToken: string,
@@ -197,6 +262,39 @@ async function getUniswapV3Quote(
     }
   } catch (e) {
     console.error("Uniswap API error:", e);
+  }
+  return null;
+}
+
+// Get 1inch quote
+async function get1inchQuote(
+  srcToken: string,
+  dstToken: string,
+  amount: string
+): Promise<any> {
+  try {
+    const url = `${ONEINCH_API}/1/quote?src=${srcToken}&dst=${dstToken}&amount=${amount}`;
+    const response = await fetch(url, {
+      headers: {
+        "Authorization": `Bearer ${ONEINCH_API_KEY}`,
+      },
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      // Get transaction data
+      const txUrl = `${ONEINCH_API}/1/swap?src=${srcToken}&dst=${dstToken}&amount=${amount}&from=${srcToken}&slippage=1`;
+      const txRes = await fetch(txUrl, {
+        headers: {
+          "Authorization": `Bearer ${ONEINCH_API_KEY}`,
+        },
+      });
+      if (txRes.ok) {
+        return await txRes.json();
+      }
+    }
+  } catch (e) {
+    console.error("1inch error:", e);
   }
   return null;
 }
