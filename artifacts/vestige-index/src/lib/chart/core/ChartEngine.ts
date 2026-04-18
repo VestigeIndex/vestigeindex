@@ -30,8 +30,8 @@ export class ChartEngine {
   private volumeHeight: number = 0.2; // 20% of height
   
   // View state
-  private scaleX: number = 10;
-  private offsetX: number = 50;
+  private offsetX: number = 0;
+  private candleWidth: number = 6;
   private priceMin: number = 0;
   private priceMax: number = 0;
   private volumeMax: number = 0;
@@ -162,16 +162,15 @@ export class ChartEngine {
       }
     }
 
-    // Vertical grid lines (time)
-    const visibleStart = Math.floor((-this.offsetX) / this.scaleX);
-    const visibleEnd = Math.floor((this.width - this.axisWidth - this.offsetX) / this.scaleX);
+    // Vertical grid lines (time) - using visible range
+    const { startIndex, endIndex } = this.getVisibleRange();
     const candleCount = this.candles.length;
     if (candleCount === 0) return;
 
-    const timeStep = Math.max(1, Math.floor((visibleEnd - visibleStart) / 6));
+    const timeStep = Math.max(1, Math.floor((endIndex - startIndex) / 6));
     
-    for (let i = Math.max(0, visibleStart); i <= Math.min(candleCount - 1, visibleEnd); i += timeStep) {
-      const x = i * this.scaleX + this.offsetX;
+    for (let i = startIndex; i < endIndex; i += timeStep) {
+      const x = this.indexToX(i);
       if (x >= 0 && x <= this.width - this.axisWidth) {
         ctx.beginPath();
         ctx.moveTo(x, 0);
@@ -187,16 +186,17 @@ export class ChartEngine {
 
   private renderCandles(chartHeight: number): void {
     const ctx = this.ctx;
-    const candleWidth = Math.max(1, this.scaleX * 0.8);
+    const w = this.candleWidth;
+    const candleBodyWidth = Math.max(1, w - 2);
     
-    const visibleStart = Math.floor((-this.offsetX) / this.scaleX);
-    const visibleEnd = Math.floor((this.width - this.axisWidth - this.offsetX) / this.scaleX);
+    // Use visible range for performance
+    const { startIndex, endIndex } = this.getVisibleRange();
     
-    for (let i = Math.max(0, visibleStart); i < Math.min(this.candles.length, visibleEnd + 1); i++) {
+    for (let i = startIndex; i < endIndex; i++) {
       const candle = this.candles[i];
       if (!candle) continue;
 
-      const x = i * this.scaleX + this.offsetX;
+      const x = this.indexToX(i);
       
       const openY = this.priceToY(candle.open);
       const closeY = this.priceToY(candle.close);
@@ -210,15 +210,15 @@ export class ChartEngine {
       ctx.strokeStyle = color;
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(x + candleWidth / 2, highY);
-      ctx.lineTo(x + candleWidth / 2, lowY);
+      ctx.moveTo(x + w / 2, highY);
+      ctx.lineTo(x + w / 2, lowY);
       ctx.stroke();
 
       // Body
       ctx.fillStyle = color;
       const bodyTop = Math.min(openY, closeY);
       const bodyHeight = Math.max(1, Math.abs(closeY - openY));
-      ctx.fillRect(x, bodyTop, candleWidth, bodyHeight);
+      ctx.fillRect(x + 1, bodyTop, candleBodyWidth, bodyHeight);
     }
   }
 
@@ -229,23 +229,24 @@ export class ChartEngine {
   private renderVolume(volumeTop: number): void {
     const ctx = this.ctx;
     const volumeHeight = this.height - volumeTop;
-    const candleWidth = Math.max(1, this.scaleX * 0.8);
+    const w = this.candleWidth;
+    const candleBodyWidth = Math.max(1, w - 2);
     
-    const visibleStart = Math.floor((-this.offsetX) / this.scaleX);
-    const visibleEnd = Math.floor((this.width - this.axisWidth - this.offsetX) / this.scaleX);
+    // Use visible range for performance
+    const { startIndex, endIndex } = this.getVisibleRange();
     
-    for (let i = Math.max(0, visibleStart); i < Math.min(this.candles.length, visibleEnd + 1); i++) {
+    for (let i = startIndex; i < endIndex; i++) {
       const candle = this.candles[i];
       if (!candle || !candle.volume) continue;
 
-      const x = i * this.scaleX + this.offsetX;
+      const x = this.indexToX(i);
       const volumePercent = (candle.volume || 0) / this.volumeMax;
       const barHeight = volumePercent * volumeHeight;
       
       const isBull = candle.close >= candle.open;
       ctx.fillStyle = isBull ? this.colors.volumeBull : this.colors.volumeBear;
       
-      ctx.fillRect(x, this.height - barHeight, candleWidth, barHeight);
+      ctx.fillRect(x + 1, this.height - barHeight, candleBodyWidth, barHeight);
     }
   }
 
@@ -356,11 +357,21 @@ export class ChartEngine {
   }
 
   private indexToX(index: number): number {
-    return index * this.scaleX + this.offsetX;
+    return (index - this.offsetX) * this.candleWidth;
   }
 
   private xToIndex(x: number): number {
-    return Math.floor((x - this.offsetX) / this.scaleX);
+    return Math.floor(x / this.candleWidth + this.offsetX);
+  }
+
+  // 🧠 VISIBLE RANGE (performance optimization)
+  private getVisibleRange(): { startIndex: number; endIndex: number } {
+    const candlesOnScreen = Math.floor((this.width - this.axisWidth) / this.candleWidth);
+    
+    const startIndex = Math.max(0, Math.floor(this.offsetX));
+    const endIndex = Math.min(this.candles.length, startIndex + candlesOnScreen + 2);
+    
+    return { startIndex, endIndex };
   }
 
   private calculatePriceStep(priceRange: number): number {
@@ -387,7 +398,7 @@ export class ChartEngine {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // EVENT HANDLERS
+  // EVENT HANDLERS (Mouse + Touch)
   // ═══════════════════════════════════════════════════════════════════════
 
   private setupEventListeners(): void {
@@ -414,6 +425,107 @@ export class ChartEngine {
     
     // Double click - reset
     this.canvas.addEventListener('dblclick', () => this.handleDoubleClick());
+    
+    // 📱 TOUCH EVENTS
+    this.setupTouchEvents();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // TOUCH SUPPORT (Pinch + Drag)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  private touchStartX: number = 0;
+  private touchStartOffsetX: number = 0;
+  private lastTouchDistance: number | null = null;
+  private lastTouchCenter: number = 0;
+
+  private setupTouchEvents(): void {
+    // Touch start
+    this.canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
+    
+    // Touch move
+    this.canvas.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
+    
+    // Touch end
+    this.canvas.addEventListener('touchend', (e) => this.handleTouchEnd(e));
+  }
+
+  private handleTouchStart(e: TouchEvent): void {
+    e.preventDefault();
+    
+    if (e.touches.length === 1) {
+      // Single touch - start pan
+      this.touchStartX = e.touches[0].clientX;
+      this.touchStartOffsetX = this.offsetX;
+      this.isDragging = true;
+      this.crosshair.visible = false;
+    } else if (e.touches.length === 2) {
+      // Two fingers - start pinch zoom
+      this.isDragging = false;
+      this.lastTouchDistance = this.getTouchDistance(e.touches);
+      this.lastTouchCenter = this.getTouchCenter(e.touches);
+    }
+    
+    this.requestRender();
+  }
+
+  private handleTouchMove(e: TouchEvent): void {
+    e.preventDefault();
+    
+    if (e.touches.length === 1 && this.isDragging) {
+      // Single finger drag - pan
+      const dx = e.touches[0].clientX - this.touchStartX;
+      const scaledDx = dx / (this.scaleX * this.candleWidth);
+      this.offsetX = this.touchStartOffsetX - scaledDx;
+      this.requestRender();
+    } else if (e.touches.length === 2) {
+      // Two finger pinch - zoom
+      const newDistance = this.getTouchDistance(e.touches);
+      const newCenter = this.getTouchCenter(e.touches);
+      
+      if (this.lastTouchDistance !== null) {
+        const zoomFactor = newDistance / this.lastTouchDistance;
+        
+        // Calculate zoom centered on touch center
+        const oldScaleX = this.scaleX;
+        this.scaleX = Math.max(0.3, Math.min(5, this.scaleX * zoomFactor));
+        
+        // Adjust offset to zoom centered on touch
+        const scaleDiff = this.scaleX / oldScaleX;
+        const centerIndex = (this.lastTouchCenter - this.offsetX) / (this.candleWidth * oldScaleX);
+        this.offsetX = this.lastTouchCenter - centerIndex * this.candleWidth * this.scaleX;
+      }
+      
+      this.lastTouchDistance = newDistance;
+      this.lastTouchCenter = newCenter;
+      this.requestRender();
+    }
+  }
+
+  private handleTouchEnd(e: TouchEvent): void {
+    if (e.touches.length === 0) {
+      this.isDragging = false;
+      this.lastTouchDistance = null;
+    } else if (e.touches.length === 1) {
+      // Transitioned to single touch - reset drag state
+      this.isDragging = false;
+      this.lastTouchDistance = null;
+    }
+  }
+
+  private getTouchDistance(touches: TouchList): number {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  private getTouchCenter(touches: TouchList): number {
+    return (touches[0].clientX + touches[1].clientX) / 2;
+  }
+
+  // 🧠 CANDLE WIDTH (dynamic scaling)
+  private get candleWidth(): number {
+    return Math.max(2, this.scaleX * 6);
   }
 
   private handleMouseMove(e: MouseEvent): void {
@@ -458,7 +570,8 @@ export class ChartEngine {
     if (!this.isDragging) return;
     
     const dx = e.clientX - this.dragStartX;
-    this.offsetX = this.dragStartOffset + dx;
+    const scaledDx = dx / this.candleWidth;
+    this.offsetX = this.dragStartOffset + scaledDx;
     this.requestRender();
   }
 
@@ -471,27 +584,25 @@ export class ChartEngine {
     
     const rect = this.canvas.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
     
     // Don't zoom if over axis
     if (mouseX > this.width - this.axisWidth) return;
     
     const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-    const newScaleX = Math.max(2, Math.min(50, this.scaleX * zoomFactor));
+    const oldWidth = this.candleWidth;
+    const newWidth = Math.max(2, Math.min(30, oldWidth * zoomFactor));
     
     // Adjust offset to zoom centered on mouse position
-    const mousePrice = this.xToIndex(mouseX);
+    const mouseIndex = this.xToIndex(mouseX);
     const oldOffset = this.offsetX;
-    const newOffset = mouseX - mousePrice * newScaleX;
+    const newOffset = mouseIndex - mouseX / newWidth;
     
-    this.scaleX = newScaleX;
     this.offsetX = newOffset;
     this.requestRender();
   }
 
   private handleDoubleClick(): void {
-    this.scaleX = 10;
-    this.offsetX = 50;
+    this.offsetX = 0;
     this.requestRender();
   }
 
