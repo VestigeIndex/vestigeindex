@@ -1,4 +1,4 @@
-import { BrowserProvider, JsonRpcSigner, parseUnits, formatUnits } from "ethers";
+import { BrowserProvider, JsonRpcSigner, Contract, parseUnits, formatUnits, ethers } from "ethers";
 import { EVM_FEE_ADDRESS, TOP100_FEE, INDEX_FEE } from "./constants";
 
 // API Configuration - Only working providers
@@ -6,6 +6,15 @@ const UNISWAP_GATEWAY = "https://trade-api.gateway.uniswap.org/v1";
 
 // Get API keys from environment - these should be set in Vercel Dashboard
 const UNISWAP_API_KEY = "4Ms8qZqQCQSu8CE3Uxhe4jHmwVuogtXWRObOGzm9mqQ";
+
+// Mock API base for functions that still reference it
+const API_BASE = "https://api.dexscreener.com/latest";
+
+// Token approval via Erc20 contract
+const ERC20_ABI = [
+  "function approve(address spender, uint256 amount) returns (bool)",
+  "function allowance(address owner, address spender) view returns (uint256)"
+];
 
 export const NATIVE_ETH = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 export const USDT_MAINNET = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
@@ -304,25 +313,48 @@ export async function buildSwapTx(
   return data.tx;
 }
 
+// Direct token approval using Ethers contract calls
 export async function checkAllowance(
   tokenAddress: string,
   walletAddress: string,
-  chainId = 1
+  chainId = 1,
+  provider?: BrowserProvider
 ): Promise<bigint> {
-  const params = new URLSearchParams({ tokenAddress, walletAddress, chainId: chainId.toString() });
-  const resp = await fetch(`${API_BASE}/swap/approve/allowance?${params}`);
-  const data = await resp.json();
-  return BigInt(data.allowance ?? "0");
+  try {
+    const signer = provider?.getSigner() || await new BrowserProvider(window.ethereum).getSigner();
+    const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, signer);
+    const routerAddress = "0xE592427A0AEce92De3Edee1F18E0157C05861564"; // Uniswap V3 Router
+    const allowance = await tokenContract.allowance(walletAddress, routerAddress);
+    return allowance;
+  } catch (e) {
+    console.error("checkAllowance error:", e);
+    return BigInt(0);
+  }
 }
 
 export async function getApproveTx(
   tokenAddress: string,
   amount: string,
-  chainId = 1
-): Promise<any> {
-  const params = new URLSearchParams({ tokenAddress, amount, chainId: chainId.toString() });
-  const resp = await fetch(`${API_BASE}/swap/approve/transaction?${params}`);
-  return resp.json();
+  chainId = 1,
+  provider?: BrowserProvider
+): Promise<{ to: string; data: string; gas?: number }> {
+  try {
+    const signer = provider?.getSigner() || await new BrowserProvider(window.ethereum).getSigner();
+    const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, signer);
+    const routerAddress = "0xE592427A0AEce92De3Edee1F18E0157C05861564"; // Uniswap V3 Router
+    
+    // Build approval transaction manually
+    const data = tokenContract.interface.encodeFunctionData("approve", [routerAddress, amount]);
+    
+    return {
+      to: tokenAddress,
+      data: data,
+      gas: 50000
+    };
+  } catch (e) {
+    console.error("getApproveTx error:", e);
+    throw e;
+  }
 }
 
 export async function executeEVMSwap(
@@ -335,44 +367,48 @@ export async function executeEVMSwap(
 ): Promise<string> {
   const fromAddress = await signer.getAddress();
 
-  const isNativeIn = srcToken.symbol === "ETH";
+  // Get quote directly from Uniswap
+  const isNativeIn = srcToken.address.toLowerCase() === NATIVE_ETH.toLowerCase();
   const amountInEth = amountUSD / ethPriceUsd;
   const amountWei = parseUnits(amountInEth.toFixed(18).slice(0, 20), 18).toString();
-  const amountTokenWei = parseUnits(
-    (amountUSD / (ethPriceUsd || 1)).toFixed(srcToken.decimals).slice(0, srcToken.decimals + 4),
-    srcToken.decimals
-  ).toString();
 
-  const amountToUse = isNativeIn ? amountWei : amountTokenWei;
+  // Get quote from Uniswap
+  const result = await getMultiChainQuote(
+    srcToken.address,
+    dstToken.address,
+    amountWei,
+    fromAddress,
+    chainId,
+    false
+  );
 
+  const quote = result.quote;
+
+  // Handle token approval for non-native tokens
   if (!isNativeIn) {
     const allowance = await checkAllowance(srcToken.address, fromAddress, chainId);
-    if (allowance < BigInt(amountToUse)) {
-      const approveTx = await getApproveTx(srcToken.address, amountToUse, chainId);
-      const approveSent = await signer.sendTransaction({
-        to: approveTx.to,
-        data: approveTx.data,
-        gasLimit: BigInt(approveTx.gas ?? 100000),
-      });
-      await approveSent.wait();
+    if (allowance < BigInt(amountWei)) {
+      try {
+        // Try to approve infinite amount
+        const approveTx = await getApproveTx(srcToken.address, "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", chainId);
+        const approveSent = await signer.sendTransaction({
+          to: approveTx.to,
+          data: approveTx.data,
+          gasLimit: BigInt(approveTx.gas ?? 100000),
+        });
+        await approveSent.wait();
+      } catch (e) {
+        console.error("Approval failed:", e);
+      }
     }
   }
 
-  const tx = await buildSwapTx(
-    srcToken.address,
-    dstToken.address,
-    amountToUse,
-    fromAddress,
-    "1",
-    chainId
-  );
-
+  // Execute the swap transaction
   const txResponse = await signer.sendTransaction({
-    to: tx.to,
-    data: tx.data,
-    value: isNativeIn ? BigInt(amountToUse) : BigInt(0),
-    gasLimit: tx.gas ? BigInt(Math.ceil(tx.gas * 1.2)) : undefined,
-    gasPrice: tx.gasPrice ? BigInt(tx.gasPrice) : undefined,
+    to: quote.to,
+    data: quote.data,
+    value: isNativeIn ? BigInt(quote.value || amountWei) : BigInt(0),
+    gasLimit: quote.gas ? BigInt(Math.ceil(quote.gas * 1.2)) : undefined,
   });
 
   const receipt = await txResponse.wait();
