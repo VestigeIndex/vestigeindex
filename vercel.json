@@ -4,6 +4,7 @@
   "installCommand": "cd artifacts/vestige-index && npm install",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "ignore": ["api/", "node_modules/"],
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]
