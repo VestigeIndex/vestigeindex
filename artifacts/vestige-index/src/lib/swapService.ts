@@ -1,19 +1,16 @@
 import { BrowserProvider, JsonRpcSigner, parseUnits, formatUnits } from "ethers";
 import { EVM_FEE_ADDRESS, TOP100_FEE, INDEX_FEE } from "./constants";
 
-// API Configuration
-const SWAP_API = "https://api.swapapi.dev/v1";
-const OPENOCEAN_API = "https://open-api.openocean.finance/v2";
+// API Configuration - Only working providers
 const UNISWAP_GATEWAY = "https://trade-api.gateway.uniswap.org/v1";
-const ONEINCH_API = "https://api.1inch.dev/swap/v5.2";
 
 // Get API keys from environment - these should be set in Vercel Dashboard
 const UNISWAP_API_KEY = "4Ms8qZqQCQSu8CE3Uxhe4jHmwVuogtXWRObOGzm9mqQ";
-const ONEINCH_API_KEY = "WjU528TRkf4g5jlQLegjJcgLB4HIVg16";
 
 export const NATIVE_ETH = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 export const USDT_MAINNET = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
 export const USDC_MAINNET = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+export const WETH_MAINNET = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 export const NATIVE_BNB = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 export const NATIVE_MATIC = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 export const NATIVE_AVAX = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
@@ -100,6 +97,14 @@ interface SwapError {
   message: string;
 }
 
+// Map native ETH to WETH for Uniswap
+function mapNativeToWETH(token: string): string {
+  if (token.toLowerCase() === NATIVE_ETH.toLowerCase()) {
+    return WETH_MAINNET;
+  }
+  return token;
+}
+
 export async function getMultiChainQuote(
   srcToken: string,
   dstToken: string,
@@ -110,92 +115,20 @@ export async function getMultiChainQuote(
 ): Promise<{ quote: SwapResult; provider: string }> {
   const errors: SwapError[] = [];
   
-  // Use appropriate fee percentage based on asset type
-  const feePercent = isIndex ? INDEX_FEE : TOP100_FEE; // 0.5% for indices, 0.3% for top100
-  const feeBps = Math.round(feePercent * 100); // Convert to basis points (30 = 0.3%, 50 = 0.5%)
-
-  // LEVEL 1: OpenOcean
-  try {
-    // Include fee recipient and fee percentage in the quote request
-    const ooUrl = `${OPENOCEAN_API}/swap/${chainId}/quote?inTokenAddress=${srcToken}&outTokenAddress=${dstToken}&amount=${amountWei}&slippage=1&account=${fromAddress}&referrer=${FEE_ADDRESS}&referrerFeeBps=${feeBps}`;
-    const ooRes = await fetch(ooUrl, {
-      headers: { "Content-Type": "application/json" },
-    });
-    
-    if (ooRes.ok) {
-      const ooData = await ooRes.json();
-      if (ooData.data?.tx) {
-        return {
-          quote: {
-            to: ooData.data.tx.to,
-            data: ooData.data.tx.data,
-            value: ooData.data.tx.value || "0",
-            gas: ooData.data.estimate?.gas || 200000,
-          },
-          provider: "OpenOcean",
-        };
-      }
-    }
-  } catch (e: any) {
-    errors.push({ provider: "OpenOcean", message: e.message });
-    console.log("OpenOcean failed, trying LI.FI...");
-  }
-
-  // LEVEL 2: LI.FI
-  try {
-    const chainName = getChainName(chainId);
-    const lifiUrl = `${LIFI_API}/quote?fromChain=${chainName}&fromToken=${srcToken}&fromAmount=${amountWei}&toChain=${chainName}&toToken=${dstToken}&fromAddress=${fromAddress}`;
-    const lifiRes = await fetch(lifiUrl);
-    
-    if (lifiRes.ok) {
-      const lifiData = await lifiRes.json();
-      if (lifiData.transactionRequest) {
-        return {
-          quote: {
-            to: lifiData.transactionRequest.to,
-            data: lifiData.transactionRequest.data,
-            value: lifiData.transactionRequest.value || "0",
-            gas: lifiData.estimate?.gasCosts?.[0]?.amount || 200000,
-          },
-          provider: "LI.FI",
-        };
-      }
-    }
-  } catch (e: any) {
-    errors.push({ provider: "LI.FI", message: e.message });
-    console.log("LI.FI failed, trying 1inch...");
-  }
-
-  // LEVEL 3: 1inch
+  // Only use Uniswap Gateway - it's the only working provider
   if (chainId === 1) {
     try {
-      const inchData = await get1inchQuote(srcToken, dstToken, amountWei);
-      if (inchData) {
+      // Map native ETH to WETH
+      const srcTokenMapped = mapNativeToWETH(srcToken);
+      const dstTokenMapped = mapNativeToWETH(dstToken);
+      
+      const uniData = await getUniswapGatewayQuote(srcTokenMapped, dstTokenMapped, amountWei, fromAddress);
+      if (uniData && uniData.quote) {
         return {
           quote: {
-            to: inchData.tx?.to || "",
-            data: inchData.tx?.data || "",
-            value: inchData.tx?.value || "0",
-            gas: 200000,
-          },
-          provider: "1inch",
-        };
-      }
-    } catch (e: any) {
-      errors.push({ provider: "1inch", message: e.message });
-    }
-  }
-
-  // LEVEL 4: Uniswap V3 via Gateway API
-  if (chainId === 1) {
-    try {
-      const uniData = await getUniswapGatewayQuote(srcToken, dstToken, amountWei, fromAddress);
-      if (uniData) {
-        return {
-          quote: {
-            to: uniData.txRouter,
-            data: uniData.methodParameters?.calldata || "",
-            value: uniData.methodParameters?.value || "0",
+            to: uniData.quote.to || uniData.quote.router,
+            data: uniData.quote.callData || uniData.methodParameters?.calldata || "",
+            value: "0",
             gas: 150000,
           },
           provider: "Uniswap",
@@ -206,7 +139,7 @@ export async function getMultiChainQuote(
     }
   }
 
-  throw new Error(`All swap providers failed: ${errors.map(e => `${e.provider}: ${e.message}`).join(", ")}`);
+  throw new Error(`Uniswap unavailable: ${errors.map(e => e.message).join(", ")}`);
 }
 
 // Get Uniswap quote via Gateway API (with API key)
