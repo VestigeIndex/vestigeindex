@@ -1,7 +1,8 @@
 import { BrowserProvider, JsonRpcSigner, parseUnits, formatUnits } from "ethers";
-import { SOL_FEE_ADDRESS } from "./constants";
+import { EVM_FEE_ADDRESS, TOP100_FEE, INDEX_FEE } from "./constants";
 
 const SWAP_API = "https://api.swapapi.dev/v1";
+const OPENOCEAN_API = "https://open-api.openocean.finance/v2"; // Updated to correct endpoint
 
 export const NATIVE_ETH = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 export const USDT_MAINNET = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
@@ -9,6 +10,12 @@ export const USDC_MAINNET = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 export const NATIVE_BNB = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 export const NATIVE_MATIC = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 export const NATIVE_AVAX = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+
+// Fee recipient address (from constants)
+const FEE_ADDRESS = EVM_FEE_ADDRESS;
+
+// Fee percentages (0.3% for Top100, 0.5% for Indices)
+const FEE_PERCENTAGE = TOP100_FEE; // 0.3%
 
 export interface SwapQuote {
   dstAmount: string;
@@ -70,7 +77,6 @@ export function getTokenBySymbol(symbol: string): TokenInfo | null {
 // Level 2: LI.FI (cross-chain)
 // Level 3: Uniswap V3 (direct)
 
-const OPENOCEAN_API = "https://open-api.openocean.io/v2";
 const LIFI_API = "https://li.quest/v1";
 const UNISWAP_QUOTER = "https://api.uniswap.org/v1";
 const UNISWAP_V3_ROUTER = "0xE592427A0AEce92De3Edee1F18E0157C05861564";
@@ -92,13 +98,19 @@ export async function getMultiChainQuote(
   dstToken: string,
   amountWei: string,
   fromAddress: string,
-  chainId: number = 1
+  chainId: number = 1,
+  isIndex: boolean = false
 ): Promise<{ quote: SwapResult; provider: string }> {
   const errors: SwapError[] = [];
+  
+  // Use appropriate fee percentage based on asset type
+  const feePercent = isIndex ? INDEX_FEE : TOP100_FEE; // 0.5% for indices, 0.3% for top100
+  const feeBps = Math.round(feePercent * 100); // Convert to basis points (30 = 0.3%, 50 = 0.5%)
 
   // LEVEL 1: OpenOcean
   try {
-    const ooUrl = `${OPENOCEAN_API}/swap/${chainId}/quote?inTokenAddress=${srcToken}&outTokenAddress=${dstToken}&amount=${amountWei}&slippage=1&account=${fromAddress}`;
+    // Include fee recipient and fee percentage in the quote request
+    const ooUrl = `${OPENOCEAN_API}/swap/${chainId}/quote?inTokenAddress=${srcToken}&outTokenAddress=${dstToken}&amount=${amountWei}&slippage=1&account=${fromAddress}&referrer=${FEE_ADDRESS}&referrerFeeBps=${feeBps}`;
     const ooRes = await fetch(ooUrl, {
       headers: { "Content-Type": "application/json" },
     });
@@ -208,7 +220,8 @@ export async function getQuote(
   dstTokenAddress: string,
   amountWei: string,
   chainId = 1,
-  sender: string = "0x0000000000000000000000000000000000000000"
+  sender: string = "0x0000000000000000000000000000000000000000",
+  isIndex: boolean = false
 ): Promise<SwapQuote> {
   try {
     const result = await getMultiChainQuote(
@@ -216,7 +229,8 @@ export async function getQuote(
       dstTokenAddress,
       amountWei,
       sender,
-      chainId
+      chainId,
+      isIndex
     );
 
     return {

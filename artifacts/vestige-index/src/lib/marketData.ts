@@ -1,22 +1,16 @@
-// Vestige Index - Multi-source market data with caching
-// Sources: Binance (primary), CoinGecko (fallback)
-// Cache: 30min for CoinGecko, 30s for Binance
+// Vestige Index - Multi-source market data with fallback system
+// Sources: CoinGecko (primary), CoinPaprika (fallback), Cache (last resort)
 
-const BINANCE_API = "https://api.binance.com/api/v3";
 const COINGECKO_API = "https://api.coingecko.com/api/v3";
+const COINPAPRIKA_API = "https://api.coinpaprika.com/v1";
 
 // LocalStorage keys for persistent caching
 const CACHE_KEYS = {
-  BINANCE: "vestige_binance_cache",
-  COINGECKO: "vestige_coingecko_cache",
   MARKET: "vestige_market_data",
+  MARKET_V2: "vestige_market_cache",
 };
 
-const CACHE_DURATION = {
-  BINANCE: 60 * 1000, // 1 minute
-  COINGECKO: 30 * 60 * 1000, // 30 minutes
-  MARKET: 60 * 1000, // 1 minute
-};
+const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
 
 // Helper functions for localStorage cache
 function getCache<T>(key: string, maxAge: number): T | null {
@@ -51,7 +45,6 @@ const TOKEN_ICONS: Record<string, string> = {
   DOGE: "https://assets.coingecko.com/coins/images/5/small/dogecoin.png",
   AVAX: "https://assets.coingecko.com/coins/images/12559/small/Avalanche_Circle_RedWhite_Trans.png",
   DOT: "https://assets.coingecko.com/coins/images/12171/small/polkadot.png",
-  MATIC: "https://assets.coingecko.com/coins/images/4713/small/matic-token-icon.png",
   LINK: "https://assets.coingecko.com/coins/images/877/small/chainlink-new-logo.png",
   UNI: "https://assets.coingecko.com/coins/images/12504/small/uniswap-uni.png",
   ATOM: "https://assets.coingecko.com/coins/images/1481/small/cosmos_hub.png",
@@ -66,51 +59,17 @@ const TOKEN_ICONS: Record<string, string> = {
   TRX: "https://assets.coingecko.com/coins/images/1094/small/tron-logo.png",
   XMR: "https://assets.coingecko.com/coins/images/69/small/monero_logo.png",
   ETC: "https://assets.coingecko.com/coins/images/453/small/ethereum-classic-logo.png",
-  XEM: "https://assets.coingecko.com/coins/images/873/small/xem-logo.png",
   XTZ: "https://assets.coingecko.com/coins/images/976/small/Tezos-logo.png",
-  BTCB: "https://assets.coingecko.com/coins/images/14286/small/BTCB.png",
   CAKE: "https://assets.coingecko.com/coins/images/12632/small/cake.png",
-  BTT: "https://assets.coingecko.com/coins/images/23030/small/btt.png",
-  HOT: "https://assets.coingecko.com/coins/images/5378/small/hotcoin.jpg",
-  AR: "https://assets.coingecko.com/coins/images/4343/small/oRtixSiK_400x400.jpg",
-  SAND: "https://assets.coingecko.com/coins/images/6219/small/sandbox_logo.jpg",
-  MANA: "https://assets.coingecko.com/coins/images/878/small/mana.png",
-  ENJ: "https://assets.coingecko.com/coins/images/4712/small/enjincoin.png",
-  AXS: "https://assets.coingecko.com/coins/images/13029/small/axie_infinity_logo.png",
-  CHZ: "https://assets.coingecko.com/coins/images/8834/small/chz-token.png",
-  AAVE: "https://assets.coingecko.com/coins/images/12645/small/AAVE.png",
-  MKR: "https://assets.coingecko.com/coins/images/13686/small/Mark_new_256.png",
-  SNX: "https://assets.coingecko.com/coins/images/3406/small/SNX.png",
-  CRV: "https://assets.coingecko.com/coins/images/12124/small/Curve.png",
-  COMP: "https://assets.coingecko.com/coins/images/10775/small/COMP.png",
-  YFI: "https://assets.coingecko.com/coins/images/11849/small/yearn-finance-yfi-logo.png",
-  SUSHI: "https://assets.coingecko.com/coins/images/12271/small/512x512_Logo_no_text_3.png",
-  BAL: "https://assets.coingecko.com/coins/images/11683/small/Balancer_Vertical_White_RGB.png",
-  GRT: "https://assets.coingecko.com/coins/images/9977/small/GRT.png",
-  ENS: "https://assets.coingecko.com/coins/images/19785/small/acat.png",
-  "1INCH": "https://assets.coingecko.com/coins/images/13469/small/1inch-token.png",
-  RUNE: "https://assets.coingecko.com/coins/images/6595/small/Rune200x200.png",
-  KAVA: "https://assets.coingecko.com/coins/images/9761/small/kava.png",
-  ZEC: "https://assets.coingecko.com/coins/images/486/small/zelcore.png",
-  WAVES: "https://assets.coingecko.com/coins/images/11311/small/waves.png",
-  ZIL: "https://assets.coingecko.com/coins/images/996/small/zilliqa-logo.png",
-  MIN: "https://assets.coingecko.com/coins/images/15067/small/photo_2022-01-17_14-36-33.jpg",
-  EGLD: "https://assets.coingecko.com/coins/images/12337/small/egld-token-logo.png",
-  OMG: "https://assets.coingecko.com/coins/images/776/small/OMG_Network.jpg",
-  ZRX: "https://assets.coingecko.com/coins/images/390/small/zrx.png",
-  SKL: "https://assets.coingecko.com/coins/images/14169/small/skill_2023.jpg",
-  SXP: "https://assets.coingecko.com/coins/images/9368/small/swipe.png",
-  LDO: "https://assets.coingecko.com/coins/images/13573/small/LDO_token_circle.png",
-  RVN: "https://assets.coingecko.com/coins/images/2577/small/ravencoin.png",
-  QNT: "https://assets.coingecko.com/coins/images/3370/small/5ZOu7brX.jpg",
-  RPL: "https://assets.coingecko.com/coins/images/1583/small/revoke.png",
-  LRC: "https://assets.coingecko.com/coins/images/1358/small/LRC.png",
-  OP: "https://assets.coingecko.com/coins/images/25246/small/Optimism.png",
+  SHIB: "https://assets.coingecko.com/coins/images/11939/small/shiba.png",
+  PEPE: "https://assets.coingecko.com/coins/images/31053/small/pepe-token.jpeg",
   ARB: "https://assets.coingecko.com/coins/images/16547/small/photo_2023-03-29_21.47.12.jpeg",
+  OP: "https://assets.coingecko.com/coins/images/25246/small/Optimism.png",
   INJ: "https://assets.coingecko.com/coins/images/12882/small/Secondary_Symbol.png",
   SUI: "https://assets.coingecko.com/coins/images/26375/small/sui_asset.jpeg",
-  PEPE: "https://assets.coingecko.com/coins/images/31053/small/pepe-token.jpeg",
-  SHIB: "https://assets.coingecko.com/coins/images/11939/small/shiba.png",
+  AAVE: "https://assets.coingecko.com/coins/images/12645/small/AAVE.png",
+  MKR: "https://assets.coingecko.com/coins/images/13686/small/Mark_new_256.png",
+  MATIC: "https://assets.coingecko.com/coins/images/4713/small/matic-token-icon.png",
 };
 
 function getTokenImage(symbol: string): string {
@@ -118,23 +77,8 @@ function getTokenImage(symbol: string): string {
   if (TOKEN_ICONS[upper]) {
     return TOKEN_ICONS[upper];
   }
-  // Fallback to generic CoinGecko icon
   return `https://assets.coingecko.com/coins/images/1/small/${symbol.toLowerCase()}.png`;
 }
-
-// In-memory cache
-let binanceCache: {
-  prices: Record<string, { price: number; change: number; volume: number }>;
-  timestamp: number;
-} | null = null;
-
-let coinGeckoCache: {
-  tokens: any[];
-  timestamp: number;
-} | null = null;
-
-const CACHE_BINANCE = 30 * 1000; // 30 seconds
-const CACHE_COINGECKO = 30 * 60 * 1000; // 30 minutes
 
 export interface TokenData {
   id: string;
@@ -150,48 +94,10 @@ export interface TokenData {
   sparkline_in_7d?: { price: number[] };
 }
 
-// Get Binance prices (fast, update every 30s)
-export async function getBinancePrices(): Promise<Record<string, { price: number; change: number; volume: number }>> {
-  // Check cache
-  if (binanceCache && Date.now() - binanceCache.timestamp < CACHE_BINANCE) {
-    return binanceCache.prices;
-  }
-
+// Source 1: CoinGecko API
+async function fetchFromCoinGecko(): Promise<TokenData[]> {
   try {
-    const response = await fetch(`${BINANCE_API}/ticker/24hr`);
-    const data = await response.json();
-
-    const prices: Record<string, { price: number; change: number; volume: number }> = {};
-    
-    for (const item of data) {
-      if (item.symbol.endsWith("USDT")) {
-        const symbol = item.symbol.replace("USDT", "");
-        prices[symbol] = {
-          price: parseFloat(item.lastPrice),
-          change: parseFloat(item.priceChangePercent),
-          volume: parseFloat(item.quoteVolume),
-        };
-      }
-    }
-
-    // Update cache
-    binanceCache = { prices, timestamp: Date.now() };
-    return prices;
-  } catch (error) {
-    console.error("Binance API error:", error);
-    return binanceCache?.prices || {};
-  }
-}
-
-// Get CoinGecko top tokens (slow, cache for 30min)
-export async function getCoinGeckoTop250(page = 1): Promise<any[]> {
-  // Check cache
-  if (coinGeckoCache && Date.now() - coinGeckoCache.timestamp < CACHE_COINGECKO && page === 1) {
-    return coinGeckoCache.tokens;
-  }
-
-  try {
-    const url = `${COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=${page}&sparkline=false&price_change_percentage=1h,24h,7d,30d`;
+    const url = `${COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&sparkline=true&price_change_percentage=1h,24h,7d`;
     const response = await fetch(url);
     
     if (!response.ok) {
@@ -199,67 +105,89 @@ export async function getCoinGeckoTop250(page = 1): Promise<any[]> {
     }
     
     const data = await response.json();
-
-    // Cache first page
-    if (page === 1) {
-      coinGeckoCache = { tokens: data, timestamp: Date.now() };
-    }
     
-    return data;
+    // Save to cache
+    setCache(CACHE_KEYS.MARKET_V2, data);
+    
+    return data.map((token: any) => ({
+      id: token.id,
+      symbol: token.symbol.toUpperCase(),
+      name: token.name,
+      image: token.image,
+      current_price: token.current_price,
+      price_change_percentage_24h: token.price_change_percentage_24h || 0,
+      price_change_percentage_7d_in_currency: token.price_change_percentage_7d_in_currency,
+      total_volume: token.total_volume,
+      market_cap: token.market_cap,
+      market_cap_rank: token.market_cap_rank,
+      sparkline_in_7d: token.sparkline_in_7d,
+    }));
   } catch (error) {
-    console.error("CoinGecko API error:", error);
-    return coinGeckoCache?.tokens || [];
+    console.error("CoinGecko API failed:", error);
+    return [];
   }
 }
 
-// Main function: Get Top 1000 with combined data
+// Source 2: CoinPaprika API (fallback)
+async function fetchFromCoinPaprika(): Promise<TokenData[]> {
+  try {
+    const url = `${COINPAPRIKA_API}/tickers?limit=250`;
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`CoinPaprika error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    // Save to cache
+    const transformed = data.map((item: any) => ({
+      id: item.id,
+      symbol: item.symbol,
+      name: item.name,
+      image: item?.quotes?.USD?.market_cap ? getTokenImage(item.symbol) : "",
+      current_price: item?.quotes?.USD?.price || 0,
+      price_change_percentage_24h: item?.quotes?.USD?.percent_change_24h || 0,
+      price_change_percentage_7d_in_currency: item?.quotes?.USD?.percent_change_7d,
+      total_volume: item?.quotes?.USD?.volume_24h || 0,
+      market_cap: item?.quotes?.USD?.market_cap || 0,
+      market_cap_rank: item?.rank || 999,
+    }));
+    
+    setCache(CACHE_KEYS.MARKET_V2, transformed);
+    
+    return transformed;
+  } catch (error) {
+    console.error("CoinPaprika API failed:", error);
+    return [];
+  }
+}
+
+// Fallback: Get from localStorage cache
+function getFromCache(): TokenData[] {
+  const cached = getCache<TokenData[]>(CACHE_KEYS.MARKET_V2, Infinity);
+  return cached || [];
+}
+
+// Main function: Get market data with fallback
 export async function getMarketData(): Promise<TokenData[]> {
-  const binancePrices = await getBinancePrices();
-  const geckoTokens = await getCoinGeckoTop250();
+  // Try CoinGecko first
+  let data = await fetchFromCoinGecko();
   
-  // Build combined list
-  const result: TokenData[] = [];
-  const seenSymbols = new Set<string>();
-
-  // 1. First add all Binance pairs (they have better liquidity)
-  for (const [symbol, data] of Object.entries(binancePrices)) {
-    if (!seenSymbols.has(symbol) && result.length < 1000) {
-      seenSymbols.add(symbol);
-      result.push({
-        id: symbol.toLowerCase(),
-        symbol: symbol,
-        name: symbol,
-        image: getTokenImage(symbol),
-        current_price: data.price,
-        price_change_percentage_24h: data.change,
-        total_volume: data.volume,
-        market_cap: data.price * data.volume,
-        market_cap_rank: result.length + 1,
-      });
-    }
+  // If CoinGecko fails, try CoinPaprika
+  if (data.length === 0) {
+    console.log("Falling back to CoinPaprika...");
+    data = await fetchFromCoinPaprika();
   }
-
-  // 2. Fill rest with CoinGecko data
-  for (const token of geckoTokens) {
-    if (!seenSymbols.has(token.symbol.toUpperCase()) && result.length < 1000) {
-      seenSymbols.add(token.symbol.toUpperCase());
-      result.push({
-        id: token.id,
-        symbol: token.symbol.toUpperCase(),
-        name: token.name,
-        image: token.image,
-        current_price: token.current_price,
-        price_change_percentage_24h: token.price_change_percentage_24h || 0,
-        price_change_percentage_7d_in_currency: token.price_change_percentage_7d_in_currency,
-        total_volume: token.total_volume,
-        market_cap: token.market_cap,
-        market_cap_rank: token.market_cap_rank,
-        sparkline_in_7d: token.sparkline_in_7d,
-      });
-    }
+  
+  // If both fail, use cache
+  if (data.length === 0) {
+    console.log("Using cached data...");
+    data = getFromCache();
   }
-
-  return result;
+  
+  // If still nothing, return empty array (will show loading)
+  return data;
 }
 
 // Get prices for specific symbols (fast, uses Binance)
