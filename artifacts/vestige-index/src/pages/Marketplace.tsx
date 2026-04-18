@@ -6,7 +6,7 @@ import { formatCurrency, formatPercent, formatNumber, cn } from "../lib/utils";
 import { Search, TrendingUp, TrendingDown, Loader2, X, BarChart3 } from "lucide-react";
 import Sparkline from "../components/Sparkline";
 import SwapModal from "../components/SwapModal";
-import TradingChart from "../components/TradingChart";
+import TradingChart from "../lib/chart/TradingChart";
 
 interface SwapTarget {
   name: string;

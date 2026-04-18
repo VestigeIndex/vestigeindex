@@ -75,6 +75,7 @@
     "@walletconnect/ethereum-provider": "^2.23.9",
     "@walletconnect/modal": "^2.7.0",
     "ethers": "^6.16.0",
-    "lightweight-charts": "^5.1.0"
+    "lightweight-charts": "^5.1.0",
+    "zustand": "^5.0.12"
   }
 }

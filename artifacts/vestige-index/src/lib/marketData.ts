@@ -1,12 +1,12 @@
 // Vestige Index - Multi-source market data with fallback system
-// Priority: DIA → CoinGecko → CoinCap → Binance (last fallback)
+// Priority: CoinGecko → CoinCap → Binance (last fallback)
 
 const COINGECKO_API = "https://api.coingecko.com/api/v3";
 const DIADATA_API = "https://api.diadata.org/v1";
 const COINCAP_API = "https://api.coincap.io/v2";
 const BINANCE_API = "https://api.binance.com/api/v3";
 
-// API Keys
+// API Keys - CoinGecko demo key (limited, may not always include sparklines)
 const COINGECKO_API_KEY = "CG-ekuLMwNLc7RbL3Km4x4NxKec";
 
 // In-memory cache
@@ -248,6 +248,112 @@ export async function getAllBinancePrices(): Promise<any[]> {
   } catch {
     return [];
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HISTORICAL DATA - Binance klines with localStorage caching
+// ═══════════════════════════════════════════════════════════════════════════
+
+const HISTORICAL_CACHE_PREFIX = 'vestige_historical_';
+const HISTORICAL_CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
+
+interface HistoricalCacheEntry {
+  data: HistoricalCandle[];
+  timestamp: number;
+}
+
+export interface HistoricalCandle {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+// Get cached historical data
+export function getCachedHistoricalData(symbol: string): HistoricalCandle[] | null {
+  try {
+    const key = `${HISTORICAL_CACHE_PREFIX}${symbol.toUpperCase()}`;
+    const cached = localStorage.getItem(key);
+    if (cached) {
+      const entry: HistoricalCacheEntry = JSON.parse(cached);
+      if (Date.now() - entry.timestamp < HISTORICAL_CACHE_EXPIRY) {
+        return entry.data;
+      }
+    }
+  } catch (e) {
+    console.error('Historical cache read error:', e);
+  }
+  return null;
+}
+
+// Set cached historical data
+export function setCachedHistoricalData(symbol: string, data: HistoricalCandle[]): void {
+  try {
+    const key = `${HISTORICAL_CACHE_PREFIX}${symbol.toUpperCase()}`;
+    const entry: HistoricalCacheEntry = {
+      data,
+      timestamp: Date.now()
+    };
+    localStorage.setItem(key, JSON.stringify(entry));
+  } catch (e) {
+    console.error('Historical cache write error:', e);
+  }
+}
+
+// Fetch historical candles from Binance (klines)
+export async function getHistoricalData(
+  symbol: string, 
+  interval: string = '1h', 
+  limit: number = 168 // 7 days of hourly candles
+): Promise<HistoricalCandle[]> {
+  try {
+    const url = `${BINANCE_API}/klines?symbol=${symbol.toUpperCase()}&interval=${interval}&limit=${limit}`;
+    const res = await fetchWithTimeout(url);
+    if (!res.ok) throw new Error(`Binance klines error: ${res.status}`);
+    
+    const klines = await res.json();
+    
+    // Convert Binance kline format to our format
+    // [openTime, open, high, low, close, volume, closeTime, ...]
+    const candles: HistoricalCandle[] = klines.map((k: any[]) => ({
+      time: k[0],
+      open: parseFloat(k[1]),
+      high: parseFloat(k[2]),
+      low: parseFloat(k[3]),
+      close: parseFloat(k[4]),
+      volume: parseFloat(k[5]),
+    }));
+    
+    return candles;
+  } catch (e) {
+    console.error('Failed to fetch historical data:', e);
+    return [];
+  }
+}
+
+// Get historical data with caching
+export async function getCachedHistoricalDataWithFetch(
+  symbol: string,
+  interval: string = '1h',
+  limit: number = 168
+): Promise<HistoricalCandle[]> {
+  // Try cache first
+  const cached = getCachedHistoricalData(symbol);
+  if (cached && cached.length > 0) {
+    return cached;
+  }
+  
+  // Fetch from Binance
+  const data = await getHistoricalData(symbol, interval, limit);
+  
+  // Cache the result
+  if (data.length > 0) {
+    setCachedHistoricalData(symbol, data);
+  }
+  
+  return data;
 }
 
 // Legacy exports
