@@ -293,9 +293,11 @@ export interface EnrichedToken {
   image: string;
   current_price: number;
   price_change_percentage_24h: number;
+  price_change_percentage_7d_in_currency?: number;
   total_volume: number;
   market_cap: number;
   market_cap_rank: number;
+  sparkline_in_7d?: { price: number[] };
 }
 
 export async function getEnrichedMarketData(): Promise<EnrichedToken[]> {
@@ -307,8 +309,10 @@ export async function getEnrichedMarketData(): Promise<EnrichedToken[]> {
     image: t.image,
     current_price: t.current_price,
     price_change_percentage_24h: t.price_change_percentage_24h,
+    price_change_percentage_7d_in_currency: t.price_change_percentage_7d_in_currency,
     total_volume: t.total_volume,
     market_cap: t.market_cap,
     market_cap_rank: t.market_cap_rank,
+    sparkline_in_7d: t.sparkline_in_7d,
   }));
 }
