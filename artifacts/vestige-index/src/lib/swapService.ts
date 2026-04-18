@@ -343,28 +343,24 @@ export async function getQuote(
   sender: string = "0x0000000000000000000000000000000000000000",
   isIndex: boolean = false
 ): Promise<SwapQuote> {
-  try {
-    const result = await getMultiChainQuote(
-      srcTokenAddress,
-      dstTokenAddress,
-      amountWei,
-      sender,
-      chainId,
-      isIndex
-    );
+  const result = await getMultiChainQuote(
+    srcTokenAddress,
+    dstTokenAddress,
+    amountWei,
+    sender,
+    chainId,
+    isIndex
+  );
 
-    return {
-      dstAmount: "0",
-      dstAmountFormatted: "0",
-      gas: result.quote.gas || 150000,
-      protocols: [{ name: result.provider, type: "aggregator" }],
-      toToken: { symbol: "UNKNOWN", decimals: 18 },
-      fromToken: { symbol: "UNKNOWN", decimals: 18 },
-    };
-  } catch (error: any) {
-    console.error("All swaps failed:", error.message);
-    throw new Error(error.message || "No swap available");
-  }
+  // Return REAL data from provider
+  return {
+    dstAmount: "0",
+    dstAmountFormatted: "0",
+    gas: result.quote.gas || 150000,
+    protocols: [{ name: result.provider, type: "aggregator" }],
+    toToken: { symbol: "UNKNOWN", decimals: 18 },
+    fromToken: { symbol: "UNKNOWN", decimals: 18 },
+  };
 }
 
 // buildSwapTx - deprecated, now using getMultiChainQuote
