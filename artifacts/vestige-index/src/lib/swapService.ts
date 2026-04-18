@@ -442,15 +442,27 @@ export async function executeEVMSwap(
   const amountInEth = amountUSD / ethPriceUsd;
   const amountWei = parseUnits(amountInEth.toFixed(18).slice(0, 20), 18).toString();
 
-  // Get quote from Uniswap
-  const result = await getMultiChainQuote(
-    srcToken.address,
-    dstToken.address,
-    amountWei,
-    fromAddress,
-    chainId,
-    false
-  );
+  // Get quote with safety
+  let result;
+  try {
+    result = await getMultiChainQuote(
+      srcToken.address,
+      dstToken.address,
+      amountWei,
+      fromAddress,
+      chainId,
+      false
+    );
+  } catch (e) {
+    console.error('executeEVMSwap: getMultiChainQuote failed', e);
+    throw new Error('No se pudo obtener cotización. Intenta de nuevo.');
+  }
+
+  // Safety check - validate quote has required fields
+  if (!result || !result.quote || !result.quote.to || !result.quote.data) {
+    console.error('executeEVMSwap: invalid quote', result);
+    throw new Error('Cotización inválida. Intenta de nuevo.');
+  }
 
   const quote = result.quote;
 
