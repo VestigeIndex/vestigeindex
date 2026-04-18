@@ -143,7 +143,7 @@ export function useIndexPrices() {
 
   const fetchIndexPrices = useCallback(async () => {
     try {
-      // All indices from config - use CoinGecko IDs
+      // Only indices with confirmed addresses - use CoinGecko IDs
       const ids = [
         "defipulse-index",         // DPI
         "metaverse-index",        // MVI
@@ -152,9 +152,7 @@ export function useIndexPrices() {
         "tether-gold",           // XAUt
         "backed-cspx",           // bCSPX
         "backed-ibta",           // bIBTA
-        "data-economy-index",     // DATA
         "synthetix-defi-index",  // sDEFI
-        "synthetix-cex-index",   // sCEX
       ].join(",");
       
       const url = `${COINGECKO_BASE}/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`;
@@ -171,9 +169,7 @@ export function useIndexPrices() {
         "tether-gold": "XAUt",
         "backed-cspx": "bCSPX",
         "backed-ibta": "bIBTA",
-        "data-economy-index": "DATA",
         "synthetix-defi-index": "sDEFI",
-        "synthetix-cex-index": "sCEX",
       };
 
       const result: Record<string, { price: number; change: number }> = {};

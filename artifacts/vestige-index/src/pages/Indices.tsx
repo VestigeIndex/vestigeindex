@@ -170,7 +170,7 @@ function IndexCard({
 }
 
 export default function Indices() {
-  const { lang } = useApp();
+  const { lang, wallet } = useApp();
   const prices = useIndexPrices();
   const [swapTarget, setSwapTarget] = useState<SwapTarget | null>(null);
   const [swapMode, setSwapMode] = useState<"buy" | "sell">("buy");
@@ -183,6 +183,13 @@ export default function Indices() {
   }, [selectedCategory]);
 
   function openSwap(item: TokenizedIndex, mode: "buy" | "sell") {
+    // Check if wallet is connected first
+    if (!wallet.connected) {
+      // Show message to connect wallet - can be handled by showing a prompt
+      alert("⚠️ Por favor conecta tu wallet primero.\n\nHaz clic en 'Conectar Wallet' en la barra superior.");
+      return;
+    }
+    
     const priceData = prices[item.symbol];
     setSwapTarget({ 
       name: item.name, 

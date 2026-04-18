@@ -21,7 +21,7 @@ interface ChartData {
 }
 
 export default function Marketplace() {
-  const { lang } = useApp();
+  const { lang, wallet } = useApp();
   const { coins, loading, error } = usePrices(1, 1000);
   const [search, setSearch] = useState("");
   const [swapTarget, setSwapTarget] = useState<SwapTarget | null>(null);
@@ -35,6 +35,11 @@ export default function Marketplace() {
   );
 
   function openSwap(coin: SwapTarget, mode: "buy" | "sell") {
+    // Check if wallet is connected first
+    if (!wallet.connected) {
+      alert("⚠️ Por favor conecta tu wallet primero.\n\nHaz clic en 'Conectar Wallet' en la barra superior.");
+      return;
+    }
     setSwapTarget(coin);
     setSwapMode(mode);
   }
