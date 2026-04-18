@@ -1,6 +1,11 @@
 {
   "framework": "vite",
+  "root": "artifacts/vestige-index",
   "installCommand": "cd artifacts/vestige-index && npm install",
-  "buildCommand": "cd artifacts/vestige-index && npm run build",
-  "outputDirectory": "artifacts/vestige-index/dist"
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/:path*" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }
