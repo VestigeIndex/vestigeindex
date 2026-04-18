@@ -177,7 +177,41 @@ export default function Header() {
           >
             <Menu size={18} />
           </button>
-          <span className="text-sm font-bold tracking-widest hidden sm:block">VESTIGE INDEX</span>
+          
+          {/* Logo - adapts to theme */}
+          <div className="flex items-center gap-2">
+            <svg 
+              viewBox="0 0 100 100" 
+              width="28" 
+              height="28" 
+              className="dark:brightness-100 dark:drop-shadow-[0_0_8px_rgba(34,197,94,0.5)] brightness-0"
+              style={{color: '#22c55e'}}
+            >
+              <defs>
+                <linearGradient id="headerLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#22c55e" />
+                  <stop offset="100%" stopColor="#16a34a" />
+                </linearGradient>
+              </defs>
+              <path 
+                d="M15 85 L35 25 L50 60 L65 25 L85 85" 
+                fill="none" 
+                stroke="url(#headerLogoGrad)" 
+                strokeWidth="6" 
+                strokeLinecap="round" 
+                strokeLinejoin="round"
+              />
+              <path 
+                d="M70 20 L85 20 L85 35 M78 28 L85 35 L92 28" 
+                fill="none" 
+                stroke="#22c55e" 
+                strokeWidth="4" 
+                strokeLinecap="round" 
+                strokeLinejoin="round"
+              />
+            </svg>
+            <span className="text-sm font-bold tracking-widest hidden sm:block">VESTIGE INDEX</span>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
