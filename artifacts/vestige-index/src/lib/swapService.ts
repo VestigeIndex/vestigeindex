@@ -11,18 +11,28 @@ const UNISWAP_API_KEY = "4Ms8qZqQCQSu8CE3Uxhe4jHmwVuogtXWRObOGzm9mqQ";
 // Fee BPS (0.3% = 30 BPS)
 const FEE_BPS = Math.round(TOP100_FEE * 100); // 30 = 0.3%
 
-// Get fee address based on chain type
+// Fee addresses by network type
+const FEE_ADDRESSES = {
+  evm: EVM_FEE_ADDRESS,
+  solana: SOL_FEE_ADDRESS,
+  tron: TRON_FEE_ADDRESS,
+  bitcoin: "bc1qlv9cvcfm4m09uzw725e82xuudv6q3zpxqw9x7n"
+};
+
+// Get fee address based on chain
 function getFeeAddress(chainId: number): string {
-  // Solana chains
-  if (chainId === 101 || chainId === 102 || chainId === 103) {
-    return SOL_FEE_ADDRESS;
+  // EVM chains: Ethereum, BNB, Polygon, Arbitrum, Optimism, Base, Fantom, Avalanche, Harmony
+  if ([1, 56, 137, 42161, 10, 8453, 250, 43114, 1666600000].includes(chainId)) {
+    return FEE_ADDRESSES.evm;
   }
-  // Tron (if supported in future)
-  if (chainId === 728126428) {
-    return TRON_FEE_ADDRESS;
-  }
-  // Default: EVM chains (1, 56, 137, 42161, 10, 8453, etc.)
-  return EVM_FEE_ADDRESS;
+  // Solana
+  if (chainId === 501) return FEE_ADDRESSES.solana;
+  // Tron
+  if (chainId === 728) return FEE_ADDRESSES.tron;
+  // Bitcoin (future)
+  if (chainId === 0) return FEE_ADDRESSES.bitcoin;
+  // Default to EVM
+  return FEE_ADDRESSES.evm;
 }
 
 // Token approval via Erc20 contract
@@ -169,7 +179,7 @@ export async function getMultiChainQuote(
     return cached.data;
   }
 
-  // Chain ID mapping for OpenOcean (includes Tron)
+  // Chain ID mapping for OpenOcean
   const chainIdMap: Record<number, string> = {
     1: "1",    // Ethereum
     56: "56",  // BNB Chain
@@ -179,7 +189,10 @@ export async function getMultiChainQuote(
     43114: "43114", // Avalanche
     8453: "8453", // Base
     204: "204", // opBNB
-    728126428: "728126428" // Tron
+    250: "250", // Fantom
+    1666600000: "1666600000", // Harmony
+    501: "501", // Solana
+    728: "728"  // Tron
   };
   const oaChainId = chainIdMap[chainId] || "1";
   const feeAddress = getFeeAddress(chainId);
