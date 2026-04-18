@@ -114,34 +114,13 @@ function normalizeToken(data: any, source: string) {
   };
 }
 
-// Provider 1: DIA Data
+// Provider 1: DIA Data (skip - no sparkline)
 async function getDIA(): Promise<any[]> {
-  try {
-    const res = await fetchWithTimeout(`${DIADATA_API}/assets?limit=200`);
-    if (!res.ok) throw new Error('DIA failed');
-    
-    const data = await res.json();
-    if (!Array.isArray(data)) return [];
-    
-    return data
-      .map((t: any) => normalizeToken({
-        id: t.Symbol?.toLowerCase(),
-        symbol: t.Symbol,
-        name: t.Name,
-        price: t.Price,
-        volume: t.Volume24hUSD,
-        change24h: t.PriceChange24h,
-        marketCap: t.Marketcap,
-        rank: t.Rank
-      }, 'dia'))
-      .filter((t: any) => t.current_price > 0 && t.symbol);
-  } catch (e) {
-    console.log('DIA failed:', e.message);
-    return [];
-  }
+  // Disabled - doesn't provide sparkline data
+  return [];
 }
 
-// Provider 2: CoinGecko
+// Provider 2: CoinGecko (primary - has sparkline)
 async function getGecko(): Promise<any[]> {
   try {
     const url = `${COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&sparkline=true&price_change_percentage=1h,24h,7d&x_cg_demo_api_key=${COINGECKO_API_KEY}`;
@@ -218,7 +197,7 @@ export async function getMarketData(): Promise<any[]> {
     return cache;
   }
 
-  const providers = [getDIA, getGecko, getCoinCap];
+  const providers = [getGecko, getCoinCap];
 
   for (const provider of providers) {
     try {
