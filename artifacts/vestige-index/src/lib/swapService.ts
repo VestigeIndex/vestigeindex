@@ -1,20 +1,26 @@
 import { BrowserProvider, JsonRpcSigner, Contract, parseUnits, formatUnits, ethers } from "ethers";
 import { EVM_FEE_ADDRESS, TOP100_FEE, INDEX_FEE } from "./constants";
 
-// API Configuration - Only working providers
+// API Configuration
 const UNISWAP_GATEWAY = "https://trade-api.gateway.uniswap.org/v1";
+const OPENOCEAN_V4_API = "https://open-api.openocean.finance/v4";
 
 // Get API keys from environment - these should be set in Vercel Dashboard
 const UNISWAP_API_KEY = "4Ms8qZqQCQSu8CE3Uxhe4jHmwVuogtXWRObOGzm9mqQ";
 
-// Mock API base for functions that still reference it
-const API_BASE = "https://api.dexscreener.com/latest";
+// Fee recipient address (from constants)
+const FEE_ADDRESS = EVM_FEE_ADDRESS;
+const FEE_BPS = Math.round(TOP100_FEE * 100); // 30 = 0.3%
 
 // Token approval via Erc20 contract
 const ERC20_ABI = [
   "function approve(address spender, uint256 amount) returns (bool)",
   "function allowance(address owner, address spender) view returns (uint256)"
 ];
+
+// Quote cache for 10 seconds
+const quoteCache = new Map<string, { data: any; timestamp: number }>();
+const QUOTE_CACHE_TTL = 10000;
 
 export const NATIVE_ETH = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 export const USDT_MAINNET = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
@@ -23,12 +29,6 @@ export const WETH_MAINNET = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 export const NATIVE_BNB = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 export const NATIVE_MATIC = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 export const NATIVE_AVAX = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
-
-// Fee recipient address (from constants)
-const FEE_ADDRESS = EVM_FEE_ADDRESS;
-
-// Fee percentages (0.3% for Top100, 0.5% for Indices)
-const FEE_PERCENTAGE = TOP100_FEE; // 0.3%
 
 export interface SwapQuote {
   dstAmount: string;
@@ -114,6 +114,11 @@ function mapNativeToWETH(token: string): string {
   return token;
 }
 
+// Generate cache key for quote
+function getQuoteCacheKey(src: string, dst: string, amount: string): string {
+  return `${src}-${dst}-${amount}`.toLowerCase();
+}
+
 export async function getMultiChainQuote(
   srcToken: string,
   dstToken: string,
@@ -124,16 +129,66 @@ export async function getMultiChainQuote(
 ): Promise<{ quote: SwapResult; provider: string }> {
   const errors: SwapError[] = [];
   
-  // Only use Uniswap Gateway - it's the only working provider
+  // Check quote cache first
+  const cacheKey = getQuoteCacheKey(srcToken, dstToken, amountWei);
+  const cached = quoteCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < QUOTE_CACHE_TTL) {
+    return cached.data;
+  }
+
+  // Chain ID mapping for OpenOcean
+  const chainIdMap: Record<number, string> = {
+    1: "1",
+    56: "56",
+    137: "137",
+    42161: "42161",
+    10: "10",
+    43114: "43114"
+  };
+  const oaChainId = chainIdMap[chainId] || "1";
+
+  // Try OpenOcean V4 first
+  try {
+    const srcMapped = mapNativeToWETH(srcToken);
+    const dstMapped = mapNativeToWETH(dstToken);
+    
+    const ooUrl = `${OPENOCEAN_V4_API}/${oaChainId}/swap?inTokenAddress=${srcMapped}&outTokenAddress=${dstMapped}&amountDecimals=${amountWei}&gasPriceDecimals=1000000000&slippage=1&account=${fromAddress}&referrer=${FEE_ADDRESS}&referrerFee=${FEE_BPS / 100}`;
+    
+    const ooRes = await fetch(ooUrl, {
+      headers: { "Content-Type": "application/json" },
+    });
+    
+    if (ooRes.ok) {
+      const ooData = await ooRes.json();
+      if (ooData.data?.tx) {
+        const result = {
+          quote: {
+            to: ooData.data.tx.to,
+            data: ooData.data.tx.data,
+            value: ooData.data.tx.value || "0",
+            gas: ooData.data.estimate?.gas || 200000,
+          },
+          provider: "OpenOcean",
+        };
+        // Cache the result
+        quoteCache.set(cacheKey, { data: result, timestamp: Date.now() });
+        return result;
+      }
+    }
+  } catch (e: any) {
+    errors.push({ provider: "OpenOcean", message: e.message });
+    console.log("OpenOcean V4 failed, trying Uniswap...");
+  }
+
+  // Fallback to Uniswap Gateway
   if (chainId === 1) {
     try {
-      // Map native ETH to WETH
       const srcTokenMapped = mapNativeToWETH(srcToken);
       const dstTokenMapped = mapNativeToWETH(dstToken);
       
       const uniData = await getUniswapGatewayQuote(srcTokenMapped, dstTokenMapped, amountWei, fromAddress);
       if (uniData && uniData.quote) {
-        return {
+        const result = {
           quote: {
             to: uniData.quote.to || uniData.quote.router,
             data: uniData.quote.callData || uniData.methodParameters?.calldata || "",
@@ -142,13 +197,15 @@ export async function getMultiChainQuote(
           },
           provider: "Uniswap",
         };
+        quoteCache.set(cacheKey, { data: result, timestamp: Date.now() });
+        return result;
       }
     } catch (e: any) {
       errors.push({ provider: "Uniswap", message: e.message });
     }
   }
 
-  throw new Error(`Uniswap unavailable: ${errors.map(e => e.message).join(", ")}`);
+  throw new Error(`All swap providers failed: ${errors.map(e => `${e.provider}: ${e.message}`).join(", ")}`);
 }
 
 // Get Uniswap quote via Gateway API (with API key)

@@ -1,8 +1,19 @@
 // Vestige Index - Multi-source market data with fallback system
-// Sources: CoinGecko (primary), CoinPaprika (fallback), Cache (last resort)
+// Priority: DIA → CoinGecko → CoinCap → Binance (last fallback)
 
 const COINGECKO_API = "https://api.coingecko.com/api/v3";
-const COINPAPRIKA_API = "https://api.coinpaprika.com/v1";
+const COINMARKETCAP_API = "https://pro-api.coinmarketcap.com/v2";
+const DIADATA_API = "https://api.diadata.org/v1";
+const COINCAP_API = "https://api.coincap.io/v2";
+const BINANCE_API = "https://api.binance.com/api/v3";
+
+// API Keys from environment
+const COINGECKO_API_KEY = "CG-ekuLMwNLc7RbL3Km4x4NxKec";
+const COINMARKETCAP_API_KEY = "c8319a304a904f709aeb6629ea0c6423";
+
+// In-memory cache
+let memoryCache: { data: any; timestamp: number } | null = null;
+const MEMORY_CACHE_TTL = 30000; // 30 seconds
 
 // LocalStorage keys for persistent caching
 const CACHE_KEYS = {
@@ -169,25 +180,9 @@ function getFromCache(): TokenData[] {
   return cached || [];
 }
 
-// Main function: Get market data with fallback
+// Main function: Get market data with multi-source fallback
 export async function getMarketData(): Promise<TokenData[]> {
-  // Try CoinGecko first
-  let data = await fetchFromCoinGecko();
-  
-  // If CoinGecko fails, try CoinPaprika
-  if (data.length === 0) {
-    console.log("Falling back to CoinPaprika...");
-    data = await fetchFromCoinPaprika();
-  }
-  
-  // If both fail, use cache
-  if (data.length === 0) {
-    console.log("Using cached data...");
-    data = getFromCache();
-  }
-  
-  // If still nothing, return empty array (will show loading)
-  return data;
+  return getMarketDataWithFallback();
 }
 
 // Get prices for specific symbols (fast, uses Binance)
@@ -257,11 +252,147 @@ export async function getEnrichedMarketData(): Promise<EnrichedToken[]> {
   }));
 }
 
-export async function getAllBinancePrices(): Promise<BinanceTicker[]> {
+// Normalize token data from any source
+function normalizeToken(data: any, source: string) {
+  return {
+    id: data.id || data.symbol?.toLowerCase() || data.symbol,
+    symbol: (data.symbol || "").toUpperCase(),
+    name: data.name || data.symbol,
+    image: data.image || getTokenImage(data.symbol),
+    current_price: Number(data.price || data.current_price || data.priceUsd || data.lastPrice || 0),
+    price_change_percentage_24h: Number(data.change24h || data.price_change_percentage_24h || data.changePercent24Hr || data.priceChangePercent || 0),
+    total_volume: Number(data.volume || data.total_volume || data.volumeUsd24Hr || data.quoteVolume || 0),
+    market_cap: Number(data.marketCap || data.market_cap || data.marketCapUsd || 0),
+    market_cap_rank: Number(data.rank || data.market_cap_rank || 0),
+    sparkline_in_7d: data.sparkline_in_7d || { price: [] },
+    source
+  };
+}
+
+// Provider 1: DIA Data
+async function getDIA(): Promise<TokenData[]> {
+  try {
+    const res = await fetch(`${DIADATA_API}/assets?limit=200`);
+    if (!res.ok) throw new Error('DIA failed');
+    
+    const data = await res.json();
+    return data.map((t: any) => normalizeToken({
+      id: t.symbol?.toLowerCase(),
+      symbol: t.Symbol,
+      name: t.Name,
+      price: t.Price,
+      volume: t.Volume24hUSD,
+      change24h: t.PriceChange24h,
+      marketCap: t.Marketcap,
+      rank: t.Rank
+    }, 'dia')).filter((t: any) => t.current_price > 0);
+  } catch (e) {
+    console.log("DIA failed:", e);
+    return [];
+  }
+}
+
+// Provider 2: CoinGecko
+async function getCoinGecko(): Promise<TokenData[]> {
+  try {
+    const url = `${COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&sparkline=true&price_change_percentage=1h,24h,7d&x_cg_demo_api_key=${COINGECKO_API_KEY}`;
+    const response = await fetch(url);
+    
+    if (!response.ok) throw new Error(`Gecko: ${response.status}`);
+    
+    const data = await response.json();
+    return data.map((t: any) => normalizeToken(t, 'coingecko'));
+  } catch (e) {
+    console.log("CoinGecko failed:", e);
+    return [];
+  }
+}
+
+// Provider 3: CoinCap
+async function getCoinCap(): Promise<TokenData[]> {
+  try {
+    const res = await fetch(`${COINCAP_API}/assets?limit=250`);
+    if (!res.ok) throw new Error('CoinCap failed');
+    
+    const json = await res.json();
+    return json.data.map((t: any) => normalizeToken({
+      id: t.id,
+      symbol: t.symbol,
+      name: t.name,
+      price: t.priceUsd,
+      volume: t.volumeUsd24Hr,
+      change24h: t.changePercent24Hr,
+      marketCap: t.marketCapUsd,
+      rank: t.rank
+    }, 'coincap'));
+  } catch (e) {
+    console.log("CoinCap failed:", e);
+    return [];
+  }
+}
+
+// Provider 4: Binance (last fallback - prices only)
+async function getBinance(): Promise<TokenData[]> {
+  try {
+    const res = await fetch(`${BINANCE_API}/ticker/24hr`);
+    if (!res.ok) throw new Error('Binance failed');
+    
+    const data = await res.json();
+    return data
+      .filter((t: any) => t.symbol?.endsWith('USDT'))
+      .slice(0, 200)
+      .map((t: any) => normalizeToken({
+        id: t.symbol.replace('USDT', '').toLowerCase(),
+        symbol: t.symbol.replace('USDT', ''),
+        name: t.symbol.replace('USDT', ''),
+        price: t.lastPrice,
+        change24h: t.priceChangePercent,
+        volume: t.quoteVolume,
+        marketCap: t.quoteVolume * 10 // rough estimate
+      }, 'binance'));
+  } catch (e) {
+    console.log("Binance failed:", e);
+    return [];
+  }
+}
+
+// Export for external use (like usePrices hook)
+export async function getAllBinancePrices(): Promise<any[]> {
   try {
     const response = await fetch(`${BINANCE_API}/ticker/24hr`);
     return await response.json();
   } catch {
     return [];
   }
+}
+
+// Main function with fallback chain
+export async function getMarketDataWithFallback(): Promise<TokenData[]> {
+  // Check memory cache first
+  if (memoryCache && Date.now() - memoryCache.timestamp < MEMORY_CACHE_TTL) {
+    return memoryCache.data;
+  }
+
+  const providers = [getCoinGecko, getCoinCap, getDIA, getBinance];
+  
+  for (const provider of providers) {
+    try {
+      const data = await provider();
+      if (data && data.length > 50) {
+        // Cache in memory
+        memoryCache = { data, timestamp: Date.now() };
+        // Also save to localStorage for persistence
+        setCache(CACHE_KEYS.MARKET_V2, data);
+        return data;
+      }
+    } catch (e) {
+      console.log(`Provider ${provider.name} failed, trying next...`);
+    }
+  }
+
+  // Return cached data as last resort
+  const cached = getCache<TokenData[]>(CACHE_KEYS.MARKET_V2, 24 * 60 * 60 * 1000);
+  if (cached) return cached;
+  
+  return [];
 }
