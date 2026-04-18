@@ -2,8 +2,5 @@
   "framework": "vite",
   "installCommand": "cd artifacts/vestige-index && npm install",
   "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
+  "outputDirectory": "dist"
 }
