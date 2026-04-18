@@ -6,6 +6,7 @@ import {
   getOnChainData,
   type CandleData 
 } from "../lib/indicators";
+import { CRYPTOCOMPARE_API_KEY } from "../lib/constants";
 
 export type { CandleData };
 
@@ -91,13 +92,54 @@ export default function TradingChart({
     
     try {
       const limit = Math.min(selectedRange.days * 24, 168);
+      const symbolLower = symbol.toLowerCase();
+      const symbolUpper = symbol.toUpperCase();
       
-      // Get chart data from CoinGecko with API key and timeout
+      // Try CryptoCompare first (more reliable for charts)
+      if (CRYPTOCOMPARE_API_KEY) {
+        try {
+          const ccController = new AbortController();
+          const ccTimeout = setTimeout(() => ccController.abort(), 5000);
+          
+          // Map symbol to CryptoCompare format (BTC -> BTCUSD)
+          const ccSymbol = symbolUpper === 'BTC' ? 'BTCUSD' : 
+                          symbolUpper === 'ETH' ? 'ETHUSD' : 
+                          `${symbolUpper}USD`;
+          
+          const ccResponse = await fetch(
+            `https://min-api.cryptocompare.com/data/v2/histoday?fsym=${symbolUpper}&tsym=USD&limit=${Math.min(selectedRange.days, 30)}&api_key=${CRYPTOCOMPARE_API_KEY}`,
+            { signal: ccController.signal }
+          );
+          
+          clearTimeout(ccTimeout);
+          
+          if (ccResponse.ok) {
+            const ccData = await ccResponse.json();
+            if (ccData?.Data?.Data && ccData.Data.Data.length > 0) {
+              const candleData: CandleData[] = ccData.Data.Data.map((p: any) => ({
+                time: p.time,
+                open: p.open,
+                high: p.high,
+                low: p.low,
+                close: p.close,
+                volume: p.volumefrom + p.volumeto,
+              }));
+              setData(candleData);
+              setLoading(false);
+              return;
+            }
+          }
+        } catch (ccErr) {
+          console.log('CryptoCompare fetch failed, trying CoinGecko:', ccErr);
+        }
+      }
+      
+      // Fallback to CoinGecko
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       
       const searchResponse = await fetch(
-        `https://api.coingecko.com/api/v3/coins/${symbol.toLowerCase()}/market_chart?vs_currency=usd&days=${selectedRange.days}&x_cg_demo_api_key=CG-ekuLMwNLc7RbL3Km4x4NxKec`,
+        `https://api.coingecko.com/api/v3/coins/${symbolLower}/market_chart?vs_currency=usd&days=${selectedRange.days}&x_cg_demo_api_key=CG-ekuLMwNLc7RbL3Km4x4NxKec`,
         { signal: controller.signal }
       );
       
