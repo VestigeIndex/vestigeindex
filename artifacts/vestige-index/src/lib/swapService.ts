@@ -404,5 +404,35 @@ export async function executeEVMSwap(
   });
 
   const receipt = await txResponse.wait();
-  return receipt?.hash ?? txResponse.hash;
+  return receipt?.hash ?? txHash;
+}
+
+// =============================================================================
+// SIMPLE SWAP FUNCTIONS (for SwapModal)
+// =============================================================================
+
+const EVM_REFERRER = '0xA1131edb7A6d5E816BF8548078A88a6bF3D91C7F';
+const SOLANA_REFERRER = 'BpazU34aCvMo1oyhhoxj6u3rnWkXjD8j81rKEFJ2oNLt';
+
+export function toDecimals(amount: number, decimals: number): string {
+  return (amount * Math.pow(10, decimals)).toString();
+}
+
+export async function getSwapQuote(
+  chainId: number,
+  fromToken: string,
+  toToken: string,
+  amount: string,
+  userAddress: string,
+  fee: number = 0.3
+) {
+  const referrer = chainId === 501 ? SOLANA_REFERRER : EVM_REFERRER;
+  const ooChainId = chainId.toString();
+  const url = `${OPENOCEAN_API}/${ooChainId}/swap?inTokenAddress=${fromToken}&outTokenAddress=${toToken}&amountDecimals=${amount}&gasPriceDecimals=1000000000&slippage=1&account=${userAddress}&referrer=${referrer}&referrerFee=${fee}`;
+  
+  const response = await fetch(url);
+  const data = await response.json();
+  
+  if (data.code !== 200) throw new Error(data.msg || 'Error en OpenOcean');
+  return data.data;
 }
