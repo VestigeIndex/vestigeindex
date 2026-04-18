@@ -1,5 +1,5 @@
 import { BrowserProvider, JsonRpcSigner, Contract, parseUnits, formatUnits, ethers } from "ethers";
-import { EVM_FEE_ADDRESS, TOP100_FEE, INDEX_FEE } from "./constants";
+import { EVM_FEE_ADDRESS, SOL_FEE_ADDRESS, TRON_FEE_ADDRESS, TOP100_FEE, INDEX_FEE } from "./constants";
 
 // API Configuration
 const UNISWAP_GATEWAY = "https://trade-api.gateway.uniswap.org/v1";
@@ -8,9 +8,22 @@ const OPENOCEAN_V4_API = "https://open-api.openocean.finance/v4";
 // Get API keys from environment - these should be set in Vercel Dashboard
 const UNISWAP_API_KEY = "4Ms8qZqQCQSu8CE3Uxhe4jHmwVuogtXWRObOGzm9mqQ";
 
-// Fee recipient address (from constants)
-const FEE_ADDRESS = EVM_FEE_ADDRESS;
+// Fee BPS (0.3% = 30 BPS)
 const FEE_BPS = Math.round(TOP100_FEE * 100); // 30 = 0.3%
+
+// Get fee address based on chain type
+function getFeeAddress(chainId: number): string {
+  // Solana chains
+  if (chainId === 101 || chainId === 102 || chainId === 103) {
+    return SOL_FEE_ADDRESS;
+  }
+  // Tron (if supported in future)
+  if (chainId === 728126428) {
+    return TRON_FEE_ADDRESS;
+  }
+  // Default: EVM chains (1, 56, 137, 42161, 10, 8453, etc.)
+  return EVM_FEE_ADDRESS;
+}
 
 // Token approval via Erc20 contract
 const ERC20_ABI = [
@@ -156,11 +169,20 @@ export async function getMultiChainQuote(
     return cached.data;
   }
 
-  // Chain ID mapping for OpenOcean
+  // Chain ID mapping for OpenOcean (includes Tron)
   const chainIdMap: Record<number, string> = {
-    1: "1", 56: "56", 137: "137", 42161: "42161", 10: "10", 43114: "43114"
+    1: "1",    // Ethereum
+    56: "56",  // BNB Chain
+    137: "137", // Polygon
+    42161: "42161", // Arbitrum
+    10: "10",  // Optimism
+    43114: "43114", // Avalanche
+    8453: "8453", // Base
+    204: "204", // opBNB
+    728126428: "728126428" // Tron
   };
   const oaChainId = chainIdMap[chainId] || "1";
+  const feeAddress = getFeeAddress(chainId);
 
   // Try OpenOcean V4 first
   console.log('Quote: trying OpenOcean V4...');
@@ -168,7 +190,7 @@ export async function getMultiChainQuote(
     const srcMapped = mapNativeToWETH(srcToken);
     const dstMapped = mapNativeToWETH(dstToken);
     
-    const ooUrl = `${OPENOCEAN_V4_API}/${oaChainId}/swap?inTokenAddress=${srcMapped}&outTokenAddress=${dstMapped}&amountDecimals=${amountWei}&gasPriceDecimals=1000000000&slippage=1&account=${fromAddress}&referrer=${FEE_ADDRESS}&referrerFee=${FEE_BPS / 100}`;
+    const ooUrl = `${OPENOCEAN_V4_API}/${oaChainId}/swap?inTokenAddress=${srcMapped}&outTokenAddress=${dstMapped}&amountDecimals=${amountWei}&gasPriceDecimals=1000000000&slippage=1&account=${fromAddress}&referrer=${feeAddress}&referrerFee=${FEE_BPS / 100}`;
     
     const ooRes = await fetchWithTimeout(ooUrl, { headers: { "Content-Type": "application/json" } });
     
