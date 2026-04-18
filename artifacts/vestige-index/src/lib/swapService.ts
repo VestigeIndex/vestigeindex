@@ -114,9 +114,28 @@ function mapNativeToWETH(token: string): string {
   return token;
 }
 
+// Fetch with timeout helper
+async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(timeout);
+    return res;
+  } catch (e) {
+    clearTimeout(timeout);
+    throw e;
+  }
+}
+
 // Generate cache key for quote
 function getQuoteCacheKey(src: string, dst: string, amount: string): string {
   return `${src}-${dst}-${amount}`.toLowerCase();
+}
+
+// Validate quote response
+function isValidQuote(quote: any): boolean {
+  return quote && quote.to && quote.data;
 }
 
 export async function getMultiChainQuote(
@@ -133,34 +152,29 @@ export async function getMultiChainQuote(
   const cacheKey = getQuoteCacheKey(srcToken, dstToken, amountWei);
   const cached = quoteCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < QUOTE_CACHE_TTL) {
+    console.log('Quote: using cache');
     return cached.data;
   }
 
   // Chain ID mapping for OpenOcean
   const chainIdMap: Record<number, string> = {
-    1: "1",
-    56: "56",
-    137: "137",
-    42161: "42161",
-    10: "10",
-    43114: "43114"
+    1: "1", 56: "56", 137: "137", 42161: "42161", 10: "10", 43114: "43114"
   };
   const oaChainId = chainIdMap[chainId] || "1";
 
   // Try OpenOcean V4 first
+  console.log('Quote: trying OpenOcean V4...');
   try {
     const srcMapped = mapNativeToWETH(srcToken);
     const dstMapped = mapNativeToWETH(dstToken);
     
     const ooUrl = `${OPENOCEAN_V4_API}/${oaChainId}/swap?inTokenAddress=${srcMapped}&outTokenAddress=${dstMapped}&amountDecimals=${amountWei}&gasPriceDecimals=1000000000&slippage=1&account=${fromAddress}&referrer=${FEE_ADDRESS}&referrerFee=${FEE_BPS / 100}`;
     
-    const ooRes = await fetch(ooUrl, {
-      headers: { "Content-Type": "application/json" },
-    });
+    const ooRes = await fetchWithTimeout(ooUrl, { headers: { "Content-Type": "application/json" } });
     
     if (ooRes.ok) {
       const ooData = await ooRes.json();
-      if (ooData.data?.tx) {
+      if (ooData.data?.tx && isValidQuote(ooData.data.tx)) {
         const result = {
           quote: {
             to: ooData.data.tx.to,
@@ -170,24 +184,26 @@ export async function getMultiChainQuote(
           },
           provider: "OpenOcean",
         };
-        // Cache the result
         quoteCache.set(cacheKey, { data: result, timestamp: Date.now() });
+        console.log('Quote: OpenOcean success');
         return result;
       }
     }
+    console.log('Quote: OpenOcean returned invalid data');
   } catch (e: any) {
     errors.push({ provider: "OpenOcean", message: e.message });
-    console.log("OpenOcean V4 failed, trying Uniswap...");
+    console.log('Quote: OpenOcean failed -', e.message);
   }
 
   // Fallback to Uniswap Gateway
   if (chainId === 1) {
+    console.log('Quote: trying Uniswap...');
     try {
       const srcTokenMapped = mapNativeToWETH(srcToken);
       const dstTokenMapped = mapNativeToWETH(dstToken);
       
       const uniData = await getUniswapGatewayQuote(srcTokenMapped, dstTokenMapped, amountWei, fromAddress);
-      if (uniData && uniData.quote) {
+      if (uniData && uniData.quote && isValidQuote(uniData.quote)) {
         const result = {
           quote: {
             to: uniData.quote.to || uniData.quote.router,
@@ -198,14 +214,21 @@ export async function getMultiChainQuote(
           provider: "Uniswap",
         };
         quoteCache.set(cacheKey, { data: result, timestamp: Date.now() });
+        console.log('Quote: Uniswap success');
         return result;
       }
     } catch (e: any) {
       errors.push({ provider: "Uniswap", message: e.message });
+      console.log('Quote: Uniswap failed -', e.message);
     }
   }
 
-  throw new Error(`All swap providers failed: ${errors.map(e => `${e.provider}: ${e.message}`).join(", ")}`);
+  // Last resort: return error with details
+  const errorMsg = errors.length > 0 
+    ? `All providers failed: ${errors.map(e => `${e.provider}: ${e.message}`).join(", ")}`
+    : "No swap quote available";
+  console.log('Quote: FAILED -', errorMsg);
+  throw new Error(errorMsg);
 }
 
 // Get Uniswap quote via Gateway API (with API key)
@@ -344,6 +367,8 @@ export async function getQuote(
   }
 }
 
+// buildSwapTx - deprecated, now using getMultiChainQuote
+// Keeping for backwards compatibility but it just returns a mock
 export async function buildSwapTx(
   srcTokenAddress: string,
   dstTokenAddress: string,
@@ -352,22 +377,10 @@ export async function buildSwapTx(
   slippage = "1",
   chainId = 1
 ): Promise<any> {
-  const params = new URLSearchParams({
-    src: srcTokenAddress,
-    dst: dstTokenAddress,
-    amount: amountWei,
-    from: fromAddress,
-    slippage,
-    chainId: chainId.toString(),
-  });
-  const resp = await fetch(`${API_BASE}/swap/build?${params}`);
-  if (!resp.ok) {
-    const err = await resp.json();
-    throw new Error(err.description || err.error || "Swap build failed");
-  }
-  const data = await resp.json();
-  if (data.error) throw new Error(data.description || data.error);
-  return data.tx;
+  // This function is deprecated - use getMultiChainQuote instead
+  // Return a placeholder that will be replaced by executeEVMSwap
+  console.warn('buildSwapTx is deprecated, use getMultiChainQuote');
+  return { to: "", data: "", value: "0" };
 }
 
 // Direct token approval using Ethers contract calls
