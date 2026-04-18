@@ -1,6 +1,4 @@
 {
   "framework": "vite",
-  "installCommand": "cd artifacts/vestige-index && npm install",
-  "buildCommand": "npm run build",
   "outputDirectory": "dist"
 }
