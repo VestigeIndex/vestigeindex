@@ -3,7 +3,7 @@ import { createConfig, http } from 'wagmi';
 import { mainnet, bsc, polygon, arbitrum, optimism, base } from 'wagmi/chains';
 
 // WalletConnect Project ID
-export const projectId = '9b39025ad1e21900725d77ef50a908cd';
+export const projectId = 'wcp_xN90ErfcTgGkapGuJR5NEhfVZ2YQv7cy';
 
 export const chains = [mainnet, bsc, polygon, arbitrum, optimism, base];
 
