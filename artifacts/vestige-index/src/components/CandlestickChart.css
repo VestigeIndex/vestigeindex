@@ -1,0 +1,93 @@
+.candlestick-chart-container {
+  background: #000;
+  border-radius: 12px;
+  padding: 16px;
+  margin: 16px 0;
+  border: 1px solid #333;
+  min-height: 500px;
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.timeframes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.timeframe-btn {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.timeframe-btn:hover {
+  background: #333;
+}
+
+.timeframe-btn.active {
+  background: #00FF00;
+  color: #000;
+  border-color: #00FF00;
+}
+
+.chart-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chart-controls button {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.chart-controls button:hover {
+  background: #333;
+}
+
+.chart-canvas {
+  width: 100%;
+  height: 400px;
+  cursor: crosshair;
+}
+
+.chart-loading {
+  text-align: center;
+  padding: 80px;
+  color: #888;
+}
+
+.chart-container {
+  position: relative;
+}
+
+@media (max-width: 768px) {
+  .candlestick-chart-container {
+    padding: 12px;
+  }
+  .timeframe-btn {
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+  .chart-controls button {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+}
