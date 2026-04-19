@@ -1,6 +1,7 @@
 import React from "react";
 import type { LucideIcon } from "lucide-react";
 import {
+  ArrowRightLeft,
   Blocks,
   BookOpen,
   BriefcaseBusiness,
@@ -26,6 +27,7 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
   { key: "indices", label: "Indices", eyebrow: "Structured exposure", icon: Blocks },
   { key: "news", label: "News", eyebrow: "Macro + crypto", icon: Newspaper },
   { key: "tools", label: "Tools", eyebrow: "Execution layer", icon: Wrench },
+  { key: "bridge", label: "Bridge", eyebrow: "Cross-chain", icon: ArrowRightLeft },
   { key: "community", label: "Community", eyebrow: "Network", icon: Users },
   { key: "manifesto", label: "Manifesto", eyebrow: "Research", icon: BookOpen },
 ];

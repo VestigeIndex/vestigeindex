@@ -13,8 +13,9 @@ const News = lazy(() => import("./pages/News"));
 const Tools = lazy(() => import("./pages/Tools"));
 const Community = lazy(() => import("./pages/Community"));
 const Manifesto = lazy(() => import("./pages/Manifesto"));
+const BridgePage = lazy(() => import("./pages/Bridge"));
 
-type Page = "marketplace" | "indices" | "news" | "tools" | "community" | "manifesto";
+type Page = "marketplace" | "indices" | "news" | "tools" | "community" | "manifesto" | "bridge";
 
 function AppShell() {
   const { adminPanelOpen, setAdminPanelOpen, handleVersionClick } = useApp();
@@ -27,6 +28,7 @@ function AppShell() {
     tools: <Tools />,
     community: <Community />,
     manifesto: <Manifesto />,
+    bridge: <BridgePage />,
   };
 
   return (
