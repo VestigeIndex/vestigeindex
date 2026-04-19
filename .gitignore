@@ -66,3 +66,4 @@ api_keys.json
 # Build artifacts
 *.tar.gz
 *.zip
+.dev.vars

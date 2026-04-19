@@ -34,3 +34,7 @@ enabled = true
 # name = "VESTIGE_STATE"
 # class_name = "VestigeState"
 # script_name = "vestige-index"
+
+# Account configuration (for Pages deployments)
+# Uncomment and fill in with your Cloudflare account details
+# account_id = "your-account-id-here"
