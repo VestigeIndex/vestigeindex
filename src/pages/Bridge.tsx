@@ -28,6 +28,7 @@ export default function Bridge() {
   const [amount, setAmount] = useState("");
   const [quote, setQuote] = useState<any>(null);
   const [routeInfo, setRouteInfo] = useState<BridgeRoute | null>(null);
+  const [provider, setProvider] = useState<'auto' | 'stargate' | 'lifii'>('auto');
   const [status, setStatus] = useState<"idle" | "loading" | "quoting" | "processing" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [txHash, setTxHash] = useState("");
@@ -105,7 +106,7 @@ export default function Bridge() {
       setStatus("quoting");
       try {
         const tokenType = fromToken.type === 'native' ? 'native' : 'usdc';
-        const q = await getBridgeQuote(fromChain, toChain, amount, tokenType, amountUSD);
+        const q = await getBridgeQuote(fromChain, toChain, amount, tokenType, amountUSD, provider);
         setQuote(q);
         setStatus("idle");
       } catch (err: any) {
@@ -116,7 +117,7 @@ export default function Bridge() {
     }, 800);
 
     return () => clearTimeout(timer);
-  }, [amount, fromChain, toChain, fromToken, routeInfo, amountUSD]);
+  }, [amount, fromChain, toChain, fromToken, routeInfo, amountUSD, provider]);
 
   // Update route info when destination changes
   useEffect(() => {
@@ -313,6 +314,43 @@ export default function Bridge() {
         )}
       </div>
 
+      {/* Provider Selector */}
+      <div className="bg-card/50 rounded-2xl border border-border/60 p-5">
+        <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-3">Bridge Provider</div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => { setProvider('auto'); setQuote(null); }}
+            className={`px-4 py-2.5 rounded-xl transition-all ${
+              provider === 'auto'
+                ? 'bg-primary text-white'
+                : 'bg-gray-900/50 text-gray-300 border border-gray-800 hover:border-gray-700'
+            }`}
+          >
+            ⚡ Auto
+          </button>
+          <button
+            onClick={() => { setProvider('stargate'); setQuote(null); }}
+            className={`px-4 py-2.5 rounded-xl transition-all ${
+              provider === 'stargate'
+                ? 'bg-primary text-white'
+                : 'bg-gray-900/50 text-gray-300 border border-gray-800 hover:border-gray-700'
+            }`}
+          >
+            🔒 Stargate
+          </button>
+          <button
+            onClick={() => { setProvider('lifii'); setQuote(null); }}
+            className={`px-4 py-2.5 rounded-xl transition-all ${
+              provider === 'lifii'
+                ? 'bg-primary text-white'
+                : 'bg-gray-900/50 text-gray-300 border border-gray-800 hover:border-gray-700'
+            }`}
+          >
+            🌐 LI.FI
+          </button>
+        </div>
+      </div>
+
       {/* Amount */}
       <div className="bg-card/50 rounded-2xl border border-border/60 p-5">
         <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-3">Amount</div>
@@ -371,12 +409,20 @@ export default function Bridge() {
           </div>
           <div className="border-t border-gray-800 pt-2 mt-2 space-y-2">
             <div className="flex justify-between text-xs">
-              <span className="text-gray-500">Bridge Fee (~0.06%)</span>
-              <span className="text-yellow-400">{quote.stargateFee || quote.wormholeFee} {toSymbol}</span>
+              <span className="text-gray-500">Provider</span>
+              <span className="text-purple-400">{quote.provider}</span>
             </div>
             <div className="flex justify-between text-xs">
-              <span className="text-gray-500">Vestige Fee ({quote.vestigeFeePercent}%)</span>
-              <span className="text-blue-400">{quote.vestigeFee} {toSymbol}</span>
+              <span className="text-gray-500">Bridge Fee ({quote.bridgeFeePercent}%)</span>
+              <span className="text-yellow-400">{quote.bridgeFee} {toSymbol}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-500">Platform Fee ({quote.platformFeePercent}%)</span>
+              <span className="text-blue-400">{quote.platformFee} {toSymbol}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-500">Est. Time</span>
+              <span className="text-white">{quote.estimatedTime}</span>
             </div>
             <div className="flex justify-between text-xs pt-2 border-t border-gray-800">
               <span className="text-gray-400">Total Fee</span>
