@@ -1,0 +1,39 @@
+# Cloudflare Pages Configuration
+# This file is referenced by Cloudflare when deploying
+
+[env.production]
+vars = { ENVIRONMENT = "production" }
+
+[env.preview]
+vars = { ENVIRONMENT = "preview" }
+
+[env.development]
+vars = { ENVIRONMENT = "development" }
+
+# Build configuration
+[build]
+command = "npm run build"
+cwd = "./"
+watch_paths = ["./src/**/*.{ts,tsx,jsx,js}", "./package.json"]
+
+# Functions routing
+[functions]
+main = "functions/_middleware.js"
+
+# Analytics
+[analytics]
+enabled = true
+
+# KV bindings (if needed for caching)
+# [[kv_namespaces]]
+# binding = "VESTIGE_CACHE"
+# id = "your-kv-namespace-id"
+
+# Durable Objects (if needed for persistent state)
+# [[durable_objects.bindings]]
+# name = "VESTIGE_STATE"
+# class_name = "VestigeState"
+# script_name = "vestige-index"
+
+# Account configuration (for Pages deployments)
+account_id = "a21ae076dda75cfed5d72c70952a388f"
