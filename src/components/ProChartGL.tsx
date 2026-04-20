@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { Spinner } from './ui/spinner';
+import { useIsMobile } from '../hooks/use-mobile';
+
 
 interface CandleData {
   time: number;
@@ -15,8 +17,10 @@ interface CandleData {
 const CACHE_KEY = 'vestige_chart_cache';
 const CACHE_DURATION = 30 * 60 * 1000; // 30 minutos
 
-async function getHistoricalData(symbol: string, limit: number = 500): Promise<CandleData[]> {
-  const cacheKey = `${CACHE_KEY}_${symbol}`;
+// Fetch directly from browser - CORS works in browser
+// Binance API for historical data
+async function getHistoricalData(symbol: string, interval: string = '1h', limit: number = 500): Promise<CandleData[]> {
+  const cacheKey = `${CACHE_KEY}_${symbol}_${interval}`;
   const cached = localStorage.getItem(cacheKey);
   if (cached) {
     try {
@@ -30,9 +34,9 @@ async function getHistoricalData(symbol: string, limit: number = 500): Promise<C
   }
 
   try {
-    const response = await fetch(
-      `https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=1h&limit=${limit}`
-    );
+    const sym = symbol.toUpperCase();
+    const url = `https://api.binance.com/api/v3/klines?symbol=${sym}USDT&interval=${interval}&limit=${limit}`;
+    const response = await fetch(url);
     if (!response.ok) throw new Error('API error');
     const klines = await response.json();
     const data = klines.map((k: any[]) => ({
@@ -52,10 +56,12 @@ async function getHistoricalData(symbol: string, limit: number = 500): Promise<C
   }
 }
 
+// Binance API for current price
 async function getCurrentPrice(symbol: string): Promise<number> {
   try {
+    const sym = symbol.toUpperCase();
     const response = await fetch(
-      `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}USDT`
+      `https://api.binance.com/api/v3/ticker/price?symbol=${sym}USDT`
     );
     if (!response.ok) throw new Error('API error');
     const data = await response.json();
@@ -119,17 +125,17 @@ function createOrbitControls(camera: THREE.Camera, domElement: HTMLElement): Orb
 
 export function ProChartGL({
   symbol,
-  height = 500,
-  onBuy,
-  onSell,
+  height: propHeight,
+  onSwap,
   onClose,
 }: {
   symbol: string;
   height?: number;
-  onBuy?: () => void;
-  onSell?: () => void;
+  onSwap?: () => void;
   onClose?: () => void;
 }) {
+  const isMobile = useIsMobile();
+  const height = propHeight ?? (isMobile ? 300 : 500);
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -140,6 +146,7 @@ export function ProChartGL({
   const [currentPrice, setCurrentPrice] = useState(0);
   const [priceChange, setPriceChange] = useState(0);
   const [timeRange, setTimeRange] = useState<'1D' | '1W' | '1M' | '3M' | '1Y' | 'ALL'>('1M');
+  const [interval, setInterval] = useState<'1m' | '5m' | '15m' | '1h' | '4h' | '1d'>('1h');
   const [tooltip, setTooltip] = useState<{ x: number; y: number; data: CandleData | null }>({
     x: 0,
     y: 0,
@@ -147,16 +154,23 @@ export function ProChartGL({
   });
 
   const getLimit = useCallback(() => {
-    const limits = { '1D': 24, '1W': 168, '1M': 720, '3M': 2160, '1Y': 8760, 'ALL': 2000 };
+    const limits: Record<string, number> = { 
+      '1D': 24, '1W': 168, '1M': 720, '3M': 2160, '1Y': 8760, 'ALL': 2000 
+    };
     return limits[timeRange];
   }, [timeRange]);
+
+  const getInterval = useCallback(() => {
+    return interval;
+  }, [interval]);
 
   // Fetch historical data
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       const limit = getLimit();
-      const historicalData = await getHistoricalData(symbol, limit);
+      const int = getInterval();
+      const historicalData = await getHistoricalData(symbol, int, limit);
       setData(historicalData);
       if (historicalData.length) {
         const latest = historicalData[historicalData.length - 1];
@@ -394,20 +408,12 @@ export function ProChartGL({
           </div>
         </div>
         <div className="flex gap-2">
-          {onBuy && (
+          {onSwap && (
             <button
-              onClick={onBuy}
-              className="rounded-lg bg-green-600 px-6 py-2 text-white transition hover:bg-green-700"
+              onClick={onSwap}
+              className="rounded-lg bg-primary px-6 py-2 text-white transition hover:opacity-90"
             >
-              Buy
-            </button>
-          )}
-          {onSell && (
-            <button
-              onClick={onSell}
-              className="rounded-lg bg-red-600 px-6 py-2 text-white transition hover:bg-red-700"
-            >
-              Sell
+              Swap
             </button>
           )}
           {onClose && (
@@ -421,12 +427,31 @@ export function ProChartGL({
         </div>
       </div>
 
+      {/* Interval selector - bigger for mobile */}
+      <div className="mb-3 flex flex-wrap gap-1">
+        {(['1m', '5m', '15m', '1h', '4h', '1d'] as const).map((int) => (
+          <button
+            key={int}
+            onClick={() => setInterval(int)}
+            className={`rounded px-3 py-2 text-sm touch-manipulation ${
+              interval === int
+                ? 'bg-primary text-white'
+                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+            }`}
+          >
+            {int}
+          </button>
+        ))}
+        <span className="ml-2 self-center text-xs text-gray-500">⏱️</span>
+      </div>
+
+      {/* Time range selector - bigger for mobile */}
       <div className="mb-4 flex flex-wrap gap-2">
         {(['1D', '1W', '1M', '3M', '1Y', 'ALL'] as const).map((range) => (
           <button
             key={range}
             onClick={() => setTimeRange(range)}
-            className={`rounded px-3 py-1 text-sm ${
+            className={`rounded px-4 py-2 text-sm touch-manipulation ${
               timeRange === range
                 ? 'bg-blue-600 text-white'
                 : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
@@ -441,8 +466,8 @@ export function ProChartGL({
 
       {tooltip.data && (
         <div
-          className="fixed z-50 rounded-lg border border-gray-700 bg-black/90 p-3 text-sm text-white"
-          style={{ left: tooltip.x + 15, top: tooltip.y - 80 }}
+          className="fixed z-50 rounded-lg border border-gray-700 bg-black/90 p-4 text-base text-white touch-manipulation"
+          style={{ left: tooltip.x + 20, top: tooltip.y - 100, minWidth: '160px' }}
         >
           <div className="mb-1 font-bold">{symbol}</div>
           <div>📊 Open: ${tooltip.data.open.toFixed(2)}</div>

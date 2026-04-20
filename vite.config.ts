@@ -21,6 +21,8 @@ export default defineConfig({
         "..",
         "attached_assets",
       ),
+      react: path.resolve(import.meta.dirname, "node_modules/react"),
+      "react-dom": path.resolve(import.meta.dirname, "node_modules/react-dom"),
     },
     dedupe: ["react", "react-dom"],
   },
@@ -38,10 +40,10 @@ export default defineConfig({
               id.includes("viem") ||
               id.includes("@walletconnect")
             ) {
-              return "web3-evm";
+              // return "web3-evm";
             }
             if (id.includes("@solana") || id.includes("bs58") || id.includes("tweetnacl")) {
-              return "web3-solana";
+              // return "web3-solana";
             }
             if (id.includes("three") || id.includes("lightweight-charts") || id.includes("recharts")) {
               return "charts";

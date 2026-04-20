@@ -56,9 +56,8 @@ export default function Marketplace() {
     };
   }, [filteredCoins]);
 
-  function openSwap(coin: SwapTarget, mode: "buy" | "sell") {
+  function openSwap(coin: SwapTarget) {
     setSwapTarget(coin);
-    setSwapMode(mode);
   }
 
   return (
@@ -197,11 +196,8 @@ export default function Marketplace() {
                           <button onClick={() => setChartTarget(swapTargetData)} className="institutional-button">
                             Chart
                           </button>
-                          <button onClick={() => openSwap(swapTargetData, "buy")} className="institutional-button">
-                            Buy
-                          </button>
-                          <button onClick={() => openSwap(swapTargetData, "sell")} className="institutional-button">
-                            Sell
+                          <button onClick={() => openSwap(swapTargetData)} className="institutional-button">
+                            Swap
                           </button>
                         </div>
                       </td>
@@ -242,7 +238,7 @@ export default function Marketplace() {
       </section>
 
       {swapTarget && (
-        <SwapModal coin={swapTarget} mode={swapMode} feeRate={0.003} onClose={() => setSwapTarget(null)} />
+        <SwapModal coin={swapTarget} onClose={() => setSwapTarget(null)} />
       )}
 
       {chartTarget && (
@@ -271,8 +267,7 @@ export default function Marketplace() {
               <ProChartGL
                 symbol={chartTarget.symbol}
                 height={540}
-                onBuy={() => openSwap(chartTarget, "buy")}
-                onSell={() => openSwap(chartTarget, "sell")}
+                onSwap={() => openSwap(chartTarget)}
                 onClose={() => setChartTarget(null)}
               />
             </Suspense>

@@ -67,3 +67,4 @@ api_keys.json
 *.tar.gz
 *.zip
 .dev.vars
+.env

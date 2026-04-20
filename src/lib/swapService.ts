@@ -12,7 +12,7 @@ const REFERRER_ADDRESS = '0xA1131edb7A6d5E816BF8548078A88a6bF3D91C7F';
 
 // Fee recipient address
 const FEE_ADDRESS = EVM_FEE_ADDRESS;
-const FEE_BPS = Math.round(TOP100_FEE * 100); // 30 = 0.3%
+const FEE_BPS = 50; // 0.5% max (OpenOcean limit is 5 = 0.5%)
 
 // =============================================================================
 // APIS COMENTADAS - PAUSADAS
@@ -110,9 +110,9 @@ export async function getSwapQuote(
   toToken: string,
   amount: string,
   userAddress: string,
-  fee: number = 0.3
+  slippage: number = 0.01
 ): Promise<SwapQuote> {
-  const url = `${OPENOCEAN_API}/${chainId}/swap?inTokenAddress=${fromToken}&outTokenAddress=${toToken}&amountDecimals=${amount}&gasPriceDecimals=1000000000&slippage=1&account=${userAddress}&referrer=${REFERRER_ADDRESS}&referrerFee=${fee}`;
+  const url = `${OPENOCEAN_API}/${chainId}/swap?inTokenAddress=${fromToken}&outTokenAddress=${toToken}&amountDecimals=${amount}&gasPriceDecimals=1000000000&slippage=100&account=${userAddress}&referrer=${REFERRER_ADDRESS}&referrerFee=5`;
   
   const response = await fetch(url);
   const data = await response.json();
@@ -121,7 +121,17 @@ export async function getSwapQuote(
     throw new Error(`OpenOcean error: ${data.msg || 'Unknown error'}`);
   }
   
-  return data;
+  return {
+    quote: {
+      to: data.data.to,
+      data: data.data.data,
+      value: data.data.value || "0",
+      minOutAmount: data.data.minOutAmount,
+      estimatedGas: data.data.estimatedGas,
+      price_impact: data.data.price_impact,
+    },
+    provider: "OpenOcean"
+  };
 }
 
 export interface TokenInfo {
@@ -203,7 +213,7 @@ export async function getMultiChainQuote(
     return cached.data;
   }
 
-  const feeBps = isIndex ? Math.round(INDEX_FEE * 100) : Math.round(TOP100_FEE * 100);
+  const feeBps = isIndex ? 50 : 50; // OpenOcean max is 5 (0.5%), use 50 = 0.5%
   const feeAddress = getFeeAddress(chainId);
   
   // Mapeo de tokens a direcciones conocidas
@@ -213,7 +223,7 @@ export async function getMultiChainQuote(
   // Mapeo de chain ID para OpenOcean
   const ooChainId = chainId.toString();
   
-  const ooUrl = `${OPENOCEAN_API}/${ooChainId}/swap?inTokenAddress=${srcTokenMapped}&outTokenAddress=${dstTokenMapped}&amountDecimals=${amountWei}&gasPriceDecimals=1000000000&slippage=1&account=${fromAddress}&referrer=${feeAddress}&referrerFee=${feeBps / 100}`;
+  const ooUrl = `${OPENOCEAN_API}/${ooChainId}/swap?inTokenAddress=${srcTokenMapped}&outTokenAddress=${dstTokenMapped}&amountDecimals=${amountWei}&gasPriceDecimals=1000000000&slippage=100&account=${fromAddress}&referrer=${feeAddress}&referrerFee=5`;
   
   try {
     const response = await fetch(ooUrl);

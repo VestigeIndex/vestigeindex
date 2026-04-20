@@ -13,8 +13,9 @@ export const TOP100_FEE = 0.003;
 export const INDEX_FEE = 0.005;
 export const COMMENT_FEE_USDT = 0.25;
 
+// WalletConnect - desde variable de entorno (protegido)
 export const WALLETCONNECT_PROJECT_ID =
-  import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || "9b39025ad1e21900725d77ef50a908cd";
+  import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || "";
 
 export const ADMIN_USER = import.meta.env.VITE_ADMIN_USER || "";
 export const ADMIN_PASS = import.meta.env.VITE_ADMIN_PASS || "";

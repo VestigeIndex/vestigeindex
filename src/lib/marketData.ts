@@ -1,14 +1,11 @@
 // Vestige Index - Multi-source market data with fallback system
 // Priority: DIA → CoinGecko → CoinCap → Binance (last fallback)
-
 const COINGECKO_API = "https://api.coingecko.com/api/v3";
 const DIADATA_API = "https://api.diadata.org/v1";
 const COINCAP_API = "https://api.coincap.io/v2";
 const BINANCE_API = "https://api.binance.com/api/v3";
-
 // API Keys
 const COINGECKO_API_KEY = "CG-ekuLMwNLc7RbL3Km4x4NxKec";
-
 // Interfaces
 interface RawTokenData {
   id?: string;
@@ -43,22 +40,18 @@ interface RawTokenData {
   market_cap_rank?: number | string;
   sparkline_in_7d?: { price: number[] };
 }
-
 export interface BinanceTicker {
   symbol: string;
   lastPrice: string;
   priceChangePercent: string;
   quoteVolume: string;
 }
-
 // In-memory cache
 let cache: TokenData[] | null = null;
 let lastFetch = 0;
 const CACHE_TTL = 30000; // 30 seconds
-
 // LocalStorage key
 const CACHE_KEY = "vestige_market_cache";
-
 // Helper: fetch with timeout (5s)
 async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
   const controller = new AbortController();
@@ -73,12 +66,10 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise
     throw e;
   }
 }
-
 // Helper: validate data
 function isValid(data: TokenData[]): boolean {
   return Array.isArray(data) && data.length > 5;
 }
-
 // Helper: get localStorage cache
 function getLocalCache<T>(maxAge: number): T | null {
   try {
@@ -92,14 +83,12 @@ function getLocalCache<T>(maxAge: number): T | null {
   } catch {}
   return null;
 }
-
 // Helper: set localStorage cache
 function setLocalCache(data: TokenData[]): void {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
   } catch {}
 }
-
 // Token icons
 const TOKEN_ICONS: Record<string, string> = {
   BTC: "https://assets.coingecko.com/coins/images/1/small/bitcoin.png",
@@ -133,12 +122,9 @@ const TOKEN_ICONS: Record<string, string> = {
   SUI: "https://assets.coingecko.com/coins/images/26375/small/sui_asset.jpeg",
   AAVE: "https://assets.coingecko.com/coins/images/12645/small/AAVE.png",
 };
-
 function getTokenImage(symbol: string): string {
-  const upper = symbol?.toUpperCase() || "";
-  return TOKEN_ICONS[upper] || `https://assets.coingecko.com/coins/images/1/small/${symbol?.toLowerCase() || ""}.png`;
+  return getCryptoLogoSync(symbol);
 }
-
 // Normalize token data
 function normalizeToken(data: RawTokenData, source: string): TokenData {
   const symbol = data.symbol || "";
@@ -156,9 +142,8 @@ function normalizeToken(data: RawTokenData, source: string): TokenData {
     source
   };
 }
-
 // Provider 1: DIA Data
-async function getDIA(): Promise<TokenData[]> {
+async function _getDIA_disabled(): Promise<TokenData[]> {
   try {
     const res = await fetchWithTimeout(`${DIADATA_API}/assets?limit=200`);
     if (!res.ok) throw new Error('DIA failed');
@@ -183,7 +168,6 @@ async function getDIA(): Promise<TokenData[]> {
     return [];
   }
 }
-
 // Provider 2: CoinGecko
 async function getGecko(): Promise<TokenData[]> {
   try {
@@ -200,7 +184,6 @@ async function getGecko(): Promise<TokenData[]> {
     return [];
   }
 }
-
 // Provider 3: CoinCap
 async function getCoinCap(): Promise<TokenData[]> {
   try {
@@ -225,7 +208,6 @@ async function getCoinCap(): Promise<TokenData[]> {
     return [];
   }
 }
-
 // Provider 4: Binance (last fallback)
 async function getBinance(): Promise<TokenData[]> {
   try {
@@ -255,7 +237,6 @@ async function getBinance(): Promise<TokenData[]> {
     return [];
   }
 }
-
 // Main: Cached market data
 export async function getMarketData(): Promise<TokenData[]> {
   // Check memory cache first
@@ -263,14 +244,11 @@ export async function getMarketData(): Promise<TokenData[]> {
     console.log('Using memory cache');
     return cache;
   }
-
-  const providers = [getDIA, getGecko, getCoinCap];
-
+  const providers = [getGecko, getCoinCap];
   for (const provider of providers) {
     try {
       console.log('Trying:', provider.name);
       const data = await provider();
-
       if (isValid(data)) {
         console.log('Using provider:', provider.name, 'with', data.length, 'tokens');
         cache = data;
@@ -282,7 +260,6 @@ export async function getMarketData(): Promise<TokenData[]> {
       console.log('Failed:', provider.name, '-', e.message);
     }
   }
-
   // Final fallback: Binance
   console.log('All providers failed, trying Binance...');
   const binance = await getBinance();
@@ -292,7 +269,6 @@ export async function getMarketData(): Promise<TokenData[]> {
     lastFetch = Date.now();
     return binance;
   }
-
   // Last resort: localStorage cache
   console.log('All failed, trying localStorage cache...');
   const localCache = getLocalCache<TokenData[]>(24 * 60 * 60 * 1000);
@@ -301,12 +277,10 @@ export async function getMarketData(): Promise<TokenData[]> {
     lastFetch = Date.now();
     return localCache;
   }
-
   // Return whatever we have or empty
   console.log('NO MARKET DATA AVAILABLE');
   return cache || [];
 }
-
 // Export for external use
 export async function getAllBinancePrices(): Promise<BinanceTicker[]> {
   try {
@@ -316,7 +290,6 @@ export async function getAllBinancePrices(): Promise<BinanceTicker[]> {
     return [];
   }
 }
-
 // Legacy exports
 export interface TokenData {
   id: string;
@@ -332,7 +305,6 @@ export interface TokenData {
   sparkline_in_7d?: { price: number[] };
   source?: string;
 }
-
 export interface EnrichedToken {
   id: string;
   symbol: string;
@@ -344,7 +316,6 @@ export interface EnrichedToken {
   market_cap: number;
   market_cap_rank: number;
 }
-
 export async function getEnrichedMarketData(): Promise<EnrichedToken[]> {
   const data = await getMarketData();
   return data.map((t: TokenData) => ({

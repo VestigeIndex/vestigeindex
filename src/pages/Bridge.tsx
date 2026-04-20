@@ -390,7 +390,7 @@ export default function Bridge() {
       {!wallet.connected ? (
         <button
           onClick={connectWallet}
-          className="w-full py-4 bg-primary hover:opacity-90 rounded-2xl font-semibold flex items-center justify-center gap-2"
+          className="w-full py-4 bg-primary hover:opacity-90 rounded-2xl font-semibold flex items-center justify-center gap-2 text-white"
         >
           <Wallet size={18} />
           Connect Wallet
@@ -449,7 +449,7 @@ export default function Bridge() {
         <button
           onClick={handleBridge}
           disabled={status === "loading" || status === "quoting" || status === "processing" || !quote || !routeInfo || availableToChains.length === 0}
-          className="w-full py-4 bg-primary hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed rounded-2xl font-semibold flex items-center justify-center gap-2"
+          className="w-full py-4 bg-primary hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed rounded-2xl font-semibold flex items-center justify-center gap-2 text-white"
         >
           {status === "loading" && <><Loader2 className="w-4 h-4 animate-spin" /> Loading...</>}
           {status === "quoting" && <><Loader2 className="w-4 h-4 animate-spin" /> Getting quote...</>}
@@ -461,7 +461,7 @@ export default function Bridge() {
       {status === "success" && (
         <button
           onClick={() => { setStatus("idle"); setAmount(""); setQuote(null); setTxHash(""); }}
-          className="w-full py-4 bg-gray-800 hover:bg-gray-700 rounded-2xl font-semibold"
+          className="w-full py-4 bg-gray-800 hover:bg-gray-700 rounded-2xl font-semibold text-white"
         >
           Transfer More
         </button>

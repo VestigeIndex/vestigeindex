@@ -70,6 +70,7 @@
     "vaul": "^1.1.2",
     "vite": "^5.4.21",
     "wouter": "^3.3.5",
+    "wrangler": "^4.83.0",
     "zod": "^3.23.0"
   },
   "dependencies": {
