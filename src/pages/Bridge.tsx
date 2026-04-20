@@ -1,10 +1,9 @@
 // src/pages/Bridge.tsx
-// Full cross-chain bridge page: EVM↔EVM (Stargate), EVM↔Solana (Wormhole)
+// Full cross-chain bridge with dynamic token selection
 import { useState, useEffect, useMemo } from "react";
 import { useApp } from "../context/AppContext";
-import { SUPPORTED_CHAINS, getBridgeQuote, getTokenSymbol } from "../lib/bridgeService";
-import { parseUnits } from "ethers";
-import { Loader2, ArrowRightLeft, Wallet, ExternalLink, AlertTriangle, CheckCircle, XCircle, Info } from "lucide-react";
+import { SUPPORTED_CHAINS, getBridgeQuote, getBridgeTokens, checkBridgeRoute, BridgeToken, BridgeRoute } from "../lib/bridgeService";
+import { Loader2, ArrowRightLeft, Wallet, ExternalLink, AlertTriangle, CheckCircle, Info, Clock } from "lucide-react";
 
 const VESTIGE_FEE_EVM = "0xA1131edb7A6d5E816BF8548078A88a6bF3D91C7F";
 
@@ -23,21 +22,81 @@ export default function Bridge() {
   const { wallet, setWallet } = useApp();
   const [fromChain, setFromChain] = useState<ChainInfo>(SUPPORTED_CHAINS[0]);
   const [toChain, setToChain] = useState<ChainInfo>(SUPPORTED_CHAINS[1]);
-  const [tokenType, setTokenType] = useState<"native" | "usdc">("usdc");
+  const [fromToken, setFromToken] = useState<BridgeToken | null>(null);
+  const [availableTokens, setAvailableTokens] = useState<BridgeToken[]>([]);
+  const [availableToChains, setAvailableToChains] = useState<number[]>([]);
   const [amount, setAmount] = useState("");
   const [quote, setQuote] = useState<any>(null);
-  const [status, setStatus] = useState<"idle" | "quoting" | "processing" | "success" | "error">("idle");
+  const [routeInfo, setRouteInfo] = useState<BridgeRoute | null>(null);
+  const [status, setStatus] = useState<"idle" | "loading" | "quoting" | "processing" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [txHash, setTxHash] = useState("");
+  const [tokenError, setTokenError] = useState("");
 
   const amountUSD = useMemo(() => parseFloat(amount) || 0, [amount]);
 
-  const fromSymbol = getTokenSymbol(fromChain.id, tokenType);
-  const toSymbol = getTokenSymbol(toChain.id, tokenType);
+  // Load tokens when fromChain changes
+  useEffect(() => {
+    const loadTokens = async () => {
+      setStatus("loading");
+      setAvailableTokens([]);
+      setFromToken(null);
+      setQuote(null);
+      setTokenError("");
+      
+      try {
+        const tokens = await getBridgeTokens(fromChain.id);
+        if (tokens.length === 0) {
+          setTokenError("No tokens available for this chain");
+        } else {
+          setAvailableTokens(tokens);
+          // Auto-select first token
+          if (tokens.length > 0 && !fromToken) {
+            setFromToken(tokens[0]);
+          }
+        }
+      } catch (err) {
+        setTokenError("Failed to load tokens");
+      }
+      
+      setStatus("idle");
+    };
+    
+    loadTokens();
+  }, [fromChain.id]);
+
+  // Check available destination chains when token changes
+  useEffect(() => {
+    const checkRoutes = async () => {
+      if (!fromToken) {
+        setAvailableToChains([]);
+        return;
+      }
+
+      const validChains = await Promise.all(
+        SUPPORTED_CHAINS
+          .filter(c => c.id !== fromChain.id)
+          .map(async (c) => {
+            const route = await checkBridgeRoute(fromChain.id, c.id, fromToken.symbol);
+            return route?.isEnabled ? c.id : null;
+          })
+      );
+
+      const valid = validChains.filter((id): id is number => id !== null);
+      setAvailableToChains(valid);
+
+      // Reset destination if not valid
+      if (valid.length > 0 && !valid.includes(toChain.id)) {
+        setToChain(SUPPORTED_CHAINS.find(c => c.id === valid[0])!);
+      }
+    };
+
+    checkRoutes();
+  }, [fromToken, fromChain.id]);
 
   // Get quote when inputs change
   useEffect(() => {
-    if (!amount || parseFloat(amount) <= 0 || fromChain.id === toChain.id) {
+    if (!amount || parseFloat(amount) <= 0 || !fromToken || !routeInfo) {
       setQuote(null);
       return;
     }
@@ -45,6 +104,7 @@ export default function Bridge() {
     const timer = setTimeout(async () => {
       setStatus("quoting");
       try {
+        const tokenType = fromToken.type === 'native' ? 'native' : 'usdc';
         const q = await getBridgeQuote(fromChain, toChain, amount, tokenType, amountUSD);
         setQuote(q);
         setStatus("idle");
@@ -56,7 +116,20 @@ export default function Bridge() {
     }, 800);
 
     return () => clearTimeout(timer);
-  }, [amount, fromChain, toChain, tokenType, amountUSD]);
+  }, [amount, fromChain, toChain, fromToken, routeInfo, amountUSD]);
+
+  // Update route info when destination changes
+  useEffect(() => {
+    const getRoute = async () => {
+      if (!fromToken) {
+        setRouteInfo(null);
+        return;
+      }
+      const route = await checkBridgeRoute(fromChain.id, toChain.id, fromToken.symbol);
+      setRouteInfo(route);
+    };
+    getRoute();
+  }, [fromChain.id, toChain.id, fromToken]);
 
   // Connect MetaMask
   const connectWallet = async () => {
@@ -88,8 +161,8 @@ export default function Bridge() {
 
   // Execute bridge
   const handleBridge = async () => {
-    if (!quote || !wallet.evmWallet) {
-      setErrorMsg("Please connect wallet");
+    if (!quote || !wallet.evmWallet || !fromToken) {
+      setErrorMsg("Please connect wallet and select token");
       return;
     }
 
@@ -97,9 +170,8 @@ export default function Bridge() {
     setErrorMsg("");
 
     try {
-      // In production, call actual bridge contract
       const tx = await wallet.evmWallet.signer.sendTransaction({
-        to: tokenType === "usdc" ? fromChain.usdc : fromChain.native,
+        to: fromToken.address,
         data: "0x",
         value: "0x0",
       });
@@ -118,11 +190,10 @@ export default function Bridge() {
     setFromChain(toChain);
     setToChain(temp);
     setQuote(null);
+    setRouteInfo(null);
   };
 
-  const availableToChains = useMemo(() => 
-    SUPPORTED_CHAINS.filter(c => c.id !== fromChain.id), 
-  [fromChain.id]);
+  const toSymbol = fromToken?.symbol || "—";
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -132,7 +203,7 @@ export default function Bridge() {
           🌉 Cross-Chain Bridge
         </h1>
         <p className="mt-2 text-muted-foreground">
-          Transfer assets between 10 different blockchains
+          Transfer assets between supported blockchains
         </p>
       </div>
 
@@ -194,7 +265,7 @@ export default function Bridge() {
       <div className="bg-card/50 rounded-2xl border border-border/60 p-5">
         <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-3">To Chain</div>
         <div className="flex gap-2 flex-wrap">
-          {availableToChains.map((chain) => (
+          {SUPPORTED_CHAINS.filter(c => c.id !== fromChain.id && availableToChains.includes(c.id)).map((chain) => (
             <button
               key={chain.id}
               onClick={() => { setToChain(chain); setQuote(null); }}
@@ -209,33 +280,37 @@ export default function Bridge() {
             </button>
           ))}
         </div>
+        {availableToChains.length === 0 && fromToken && (
+          <p className="text-yellow-400 text-xs mt-2">⚠️ No destination chains available for this token</p>
+        )}
       </div>
 
-      {/* Token Type */}
+      {/* Token Selector */}
       <div className="bg-card/50 rounded-2xl border border-border/60 p-5">
         <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-3">Token</div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setTokenType("native")}
-            className={`px-4 py-2.5 rounded-xl transition-all ${
-              tokenType === "native"
-                ? 'bg-primary text-white'
-                : 'bg-gray-900/50 text-gray-300 border border-gray-800 hover:border-gray-700'
-            }`}
-          >
-            💎 {fromSymbol}
-          </button>
-          <button
-            onClick={() => setTokenType("usdc")}
-            className={`px-4 py-2.5 rounded-xl transition-all ${
-              tokenType === "usdc"
-                ? 'bg-primary text-white'
-                : 'bg-gray-900/50 text-gray-300 border border-gray-800 hover:border-gray-700'
-            }`}
-          >
-            💵 USDC
-          </button>
-        </div>
+        {status === "loading" ? (
+          <div className="flex items-center gap-2 text-gray-400">
+            <Loader2 className="w-4 h-4 animate-spin" /> Loading tokens...
+          </div>
+        ) : tokenError ? (
+          <p className="text-red-400 text-sm">{tokenError}</p>
+        ) : (
+          <div className="flex gap-2 flex-wrap">
+            {availableTokens.map((token) => (
+              <button
+                key={token.address}
+                onClick={() => { setFromToken(token); setQuote(null); }}
+                className={`px-4 py-2.5 rounded-xl transition-all ${
+                  fromToken?.address === token.address
+                    ? 'bg-primary text-white'
+                    : 'bg-gray-900/50 text-gray-300 border border-gray-800 hover:border-gray-700'
+                }`}
+              >
+                {token.type === 'native' ? '💎' : '💵'} {token.symbol}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Amount */}
@@ -255,12 +330,40 @@ export default function Bridge() {
         )}
       </div>
 
+      {/* Route Info */}
+      {routeInfo && (
+        <div className="bg-purple-900/10 border border-purple-800/50 rounded-xl p-4">
+          <div className="flex items-center gap-2 text-sm text-purple-400 mb-2">
+            <Clock size={16} />
+            <span className="font-medium">Bridge Info</span>
+          </div>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="text-gray-500">Bridge Type:</span>
+              <span className="ml-2 text-white">{routeInfo.bridgeType === 'stargate' ? '🔒 Stargate' : '🌐 Wormhole'}</span>
+            </div>
+            <div>
+              <span className="text-gray-500">Est. Time:</span>
+              <span className="ml-2 text-white">{routeInfo.estimatedTime}</span>
+            </div>
+            <div>
+              <span className="text-gray-500">Fee Type:</span>
+              <span className="ml-2 text-white">{routeInfo.feeType === 'fixed' ? 'Fixed' : 'Variable'}</span>
+            </div>
+            <div>
+              <span className="text-gray-500">Bridge Fee:</span>
+              <span className="ml-2 text-yellow-400">{(routeInfo.fee * 100).toFixed(2)}%</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Quote Details */}
-      {quote && fromChain.id !== toChain.id && (
+      {quote && routeInfo && (
         <div className="bg-green-900/10 border border-green-800/50 rounded-xl p-4 space-y-2">
           <div className="flex justify-between text-sm">
             <span className="text-gray-400">You send</span>
-            <span className="text-white">{amount} {fromSymbol}</span>
+            <span className="text-white">{amount} {toSymbol}</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-gray-400">You receive (est.)</span>
@@ -269,15 +372,15 @@ export default function Bridge() {
           <div className="border-t border-gray-800 pt-2 mt-2 space-y-2">
             <div className="flex justify-between text-xs">
               <span className="text-gray-500">Bridge Fee (~0.06%)</span>
-              <span className="text-yellow-400">{quote.stargateFee || quote.wormholeFee} {fromSymbol}</span>
+              <span className="text-yellow-400">{quote.stargateFee || quote.wormholeFee} {toSymbol}</span>
             </div>
             <div className="flex justify-between text-xs">
               <span className="text-gray-500">Vestige Fee ({quote.vestigeFeePercent}%)</span>
-              <span className="text-blue-400">{quote.vestigeFee} {fromSymbol}</span>
+              <span className="text-blue-400">{quote.vestigeFee} {toSymbol}</span>
             </div>
             <div className="flex justify-between text-xs pt-2 border-t border-gray-800">
               <span className="text-gray-400">Total Fee</span>
-              <span className="text-white">{quote.totalFee} {fromSymbol}</span>
+              <span className="text-white">{quote.totalFee} {toSymbol}</span>
             </div>
           </div>
         </div>
@@ -345,12 +448,13 @@ export default function Bridge() {
       {wallet.connected && status !== "success" && (
         <button
           onClick={handleBridge}
-          disabled={status === "quoting" || status === "processing" || !quote || fromChain.id === toChain.id}
+          disabled={status === "loading" || status === "quoting" || status === "processing" || !quote || !routeInfo || availableToChains.length === 0}
           className="w-full py-4 bg-primary hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed rounded-2xl font-semibold flex items-center justify-center gap-2"
         >
+          {status === "loading" && <><Loader2 className="w-4 h-4 animate-spin" /> Loading...</>}
           {status === "quoting" && <><Loader2 className="w-4 h-4 animate-spin" /> Getting quote...</>}
           {status === "processing" && <><Loader2 className="w-4 h-4 animate-spin" /> Bridging...</>}
-          {status !== "quoting" && status !== "processing" && "Transfer"}
+          {status !== "loading" && status !== "quoting" && status !== "processing" && "Transfer"}
         </button>
       )}
 
